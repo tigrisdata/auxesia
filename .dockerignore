@@ -1,0 +1,10 @@
+**
+!Cargo.toml
+!Cargo.lock
+!crates/
+!crates/**
+!docs/
+!docs/**
+docs/plans/
+**/.DS_Store
+**/target/
