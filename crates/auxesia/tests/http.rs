@@ -476,6 +476,52 @@ async fn directory_aliases_prefer_index_and_hidden_index_does_not_hide_children(
 }
 
 #[tokio::test]
+async fn sidebar_hides_the_page_that_supplies_the_directory() {
+    let root = TempDir::new().unwrap();
+    put(
+        &root,
+        "guide/README.md",
+        "---\ntitle: Readme title\n---\nReadme body",
+    );
+    put(
+        &root,
+        "guide/child.md",
+        "---\ntitle: Child\n---\nChild body",
+    );
+    let app = App::open(root.path(), false).unwrap();
+    let nav = |html: &str| {
+        html.split("<nav ")
+            .nth(1)
+            .unwrap()
+            .split("</nav>")
+            .next()
+            .unwrap()
+            .to_owned()
+    };
+    for path in ["/guide/", "/guide/child.md", "/guide/README.md"] {
+        let html = String::from_utf8(request(&app, path, None, "GET").await.2).unwrap();
+        let nav = nav(&html);
+        assert!(nav.contains("href=\"/guide/\">.</a>"), "{path}: {nav}");
+        assert!(nav.contains(">Child</a>"), "{path}: {nav}");
+        assert!(!nav.contains("README.md"), "{path}: {nav}");
+        assert!(!nav.contains("Readme title"), "{path}: {nav}");
+    }
+    // README.md is an ordinary page when index.md supplies the directory.
+    put(
+        &root,
+        "guide/index.md",
+        "---\ntitle: Index title\n---\nIndex body",
+    );
+    let html = String::from_utf8(request(&app, "/guide/", None, "GET").await.2).unwrap();
+    let nav = nav(&html);
+    assert!(!nav.contains("index.md"), "{nav}");
+    assert!(
+        nav.contains("href=\"/guide/README.md\">Readme title</a>"),
+        "{nav}"
+    );
+}
+
+#[tokio::test]
 async fn skill_ignore_hidden_archive_and_executable_permissions() {
     let root = TempDir::new().unwrap();
     put(&root, ".auxesia.yaml", "ignore: [skills/run/omit.txt]\n");

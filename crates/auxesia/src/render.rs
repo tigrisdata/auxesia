@@ -150,16 +150,8 @@ pub fn build_cached(mut site: Site, previous: Option<&Snapshot>) -> Result<Snaps
         } else {
             format!("/{dir}/")
         };
-        let prefix = if dir.is_empty() {
-            String::new()
-        } else {
-            format!("{dir}/")
-        };
-        let index = [format!("/{prefix}index.md"), format!("/{prefix}README.md")]
-            .iter()
-            .find_map(|p| site.pages.get(p));
-        let page = match index {
-            Some(page) => page_route(&site, &route, page),
+        let page = match directory_page(&site, &route) {
+            Some((_, page)) => page_route(&site, &route, page),
             None => {
                 let title = if dir.is_empty() {
                     site.config
@@ -269,6 +261,14 @@ fn discovery_entry(path: &str, page: &Page) -> String {
     )
 }
 
+/// Returns the page that supplies the directory route `dir` (ending in `/`):
+/// `index.md` takes precedence over `README.md`.
+fn directory_page<'a>(site: &'a Site, dir: &str) -> Option<(&'a String, &'a Page)> {
+    ["index.md", "README.md"]
+        .iter()
+        .find_map(|name| site.pages.get_key_value(&format!("{dir}{name}")))
+}
+
 pub(crate) fn insert(
     routes: &mut BTreeMap<String, Route>,
     path: String,
@@ -314,11 +314,9 @@ fn entries(site: &Site, dir: &str) -> BTreeMap<String, String> {
         if let Some(rest) = path.strip_prefix(dir) {
             if let Some((child, _)) = rest.split_once('/') {
                 let folder = format!("{dir}{child}/");
-                let title = [format!("{folder}index.md"), format!("{folder}README.md")]
-                    .iter()
-                    .find_map(|path| site.pages.get(path))
-                    .filter(|page| page.index)
-                    .map(|page| page.title.clone())
+                let title = directory_page(site, &folder)
+                    .filter(|(_, page)| page.index)
+                    .map(|(_, page)| page.title.clone())
                     .unwrap_or_else(|| {
                         let words = child
                             .split(['-', '_'])
@@ -386,10 +384,10 @@ fn shell(
             escape(&url(parent))
         ));
     }
-    let index_path = format!("{dir}index.md");
+    let directory = directory_page(site, dir).map(|(link, _)| link);
     let mut navigation: Vec<_> = entries(site, dir)
         .into_iter()
-        .filter(|(link, _)| link != &index_path)
+        .filter(|(link, _)| Some(link) != directory)
         .collect();
     navigation.sort_by_cached_key(|(link, title)| {
         (
