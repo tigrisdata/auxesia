@@ -37,6 +37,19 @@ async fn request(
 }
 
 #[tokio::test]
+async fn browser_title_does_not_repeat_the_site_title() {
+    let root = TempDir::new().unwrap();
+    put(&root, ".auxesia.yaml", "title: 'Docs & guides'\n");
+    put(&root, "index.md", "---\ntitle: Docs & guides\n---\nWelcome");
+    put(&root, "other.md", "---\ntitle: Other\n---\nOther");
+    let app = App::open(root.path(), false).unwrap();
+    let html = String::from_utf8(request(&app, "/", None, "GET").await.2).unwrap();
+    assert!(html.contains("<title>Docs &amp; guides</title>"));
+    let html = String::from_utf8(request(&app, "/other.md", None, "GET").await.2).unwrap();
+    assert!(html.contains("<title>Other — Docs &amp; guides</title>"));
+}
+
+#[tokio::test]
 async fn footer_supports_markdown_defaults_and_removal() {
     let root = TempDir::new().unwrap();
     let source = "---\ntitle: Home\n---\nHome body";

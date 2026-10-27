@@ -460,10 +460,14 @@ fn entries(site: &Site, dir: &str) -> BTreeMap<String, String> {
 
 fn shell(site: &Site, path: &str, title: &str, description: Option<&str>, body: &str) -> String {
     let site_title = site.config.title.as_deref().unwrap_or("Documentation");
+    let browser_title = if title == site_title {
+        title.to_owned()
+    } else {
+        format!("{title} — {site_title}")
+    };
     let mut html = format!(
-        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>{} — {}</title><meta property=\"og:title\" content=\"{}\"><meta property=\"og:site_name\" content=\"{}\"><meta property=\"og:type\" content=\"website\">",
-        escape(title),
-        escape(site_title),
+        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>{}</title><meta property=\"og:title\" content=\"{}\"><meta property=\"og:site_name\" content=\"{}\"><meta property=\"og:type\" content=\"website\">",
+        escape(&browser_title),
         escape(title),
         escape(site_title)
     );

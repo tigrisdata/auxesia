@@ -2,8 +2,6 @@
 title: Auxesia
 description: Serve Markdown documentation and downloadable skills from a local folder.
 ---
-# Auxesia
-
 Auxesia serves Markdown documentation and downloadable skills from a local folder. Browsers receive HTML. Agents can request the original Markdown at the same URL.
 
 Auxesia serves these pages from its own `docs` folder. The documentation is also a working example of a complete site.
