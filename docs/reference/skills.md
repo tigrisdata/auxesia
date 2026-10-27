@@ -63,10 +63,12 @@ Do not create both forms with the same slug. Their canonical routes conflict.
 The files `skills/index.md` and `skills/README.md` are not skills.
 They supply the page for `/skills/`, as in other folders, and need a `title` string.
 
-Bundle HTML includes `<base href="/skills/serve-auxesia/">`.
-A relative link such as `references/checks.md` therefore reaches the supporting file.
+Bundle HTML resolves relative links and images against the bundle folder.
+For example, `references/checks.md` becomes `/skills/serve-auxesia/references/checks.md`.
+This also applies to `href` and `src` attributes in raw HTML.
+Fragment links such as `#install`, absolute paths, and URLs with a scheme do not change.
 Markdown responses keep the original source, frontmatter, and relative links.
-They do not include the HTML download link or HTML base element.
+They do not include the HTML download link.
 
 ## Archive contents
 

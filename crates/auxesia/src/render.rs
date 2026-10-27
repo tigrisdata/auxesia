@@ -1,4 +1,5 @@
 use crate::content::{Failure, Page, Site};
+use comrak::{Arena, nodes::NodeValue, parse_document};
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -72,6 +73,13 @@ pub struct Snapshot {
 }
 
 pub fn markdown(source: &str) -> String {
+    render_markdown(source, None)
+}
+
+/// Renders Markdown. With a `base`, relative link and image URLs, including
+/// `href` and `src` attributes in raw HTML, are rewritten to start with it.
+/// Fragment-only, query-only, absolute-path, and scheme URLs are unchanged.
+fn render_markdown(source: &str, base: Option<&str>) -> String {
     let mut options = comrak::Options::default();
     options.render.r#unsafe = true;
     options.extension.table = true;
@@ -79,7 +87,124 @@ pub fn markdown(source: &str) -> String {
     options.extension.strikethrough = true;
     options.extension.autolink = true;
     options.extension.header_id_prefix = Some(String::new());
-    comrak::markdown_to_html(source, &options)
+    let arena = Arena::new();
+    let document = parse_document(&arena, source, &options);
+    if let Some(base) = base {
+        for node in document.descendants() {
+            match &mut node.data.borrow_mut().value {
+                NodeValue::Link(link) | NodeValue::Image(link) => {
+                    if relative(&link.url) {
+                        link.url.insert_str(0, base);
+                    }
+                }
+                NodeValue::HtmlInline(html) => *html = rebase_html(html, base),
+                NodeValue::HtmlBlock(block) => block.literal = rebase_html(&block.literal, base),
+                _ => {}
+            }
+        }
+    }
+    let mut html = String::new();
+    comrak::format_html(document, &options, &mut html).unwrap();
+    html
+}
+
+fn relative(url: &str) -> bool {
+    let scheme = url.split_once(':').is_some_and(|(scheme, _)| {
+        scheme.starts_with(|c: char| c.is_ascii_alphabetic())
+            && scheme
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+    });
+    !url.is_empty() && !url.starts_with(['#', '?', '/', '\\']) && !scheme
+}
+
+/// Prefixes relative `href` and `src` attribute values in raw HTML with `base`.
+/// Comments and the contents of `script` and `style` elements are copied as-is.
+fn rebase_html(html: &str, base: &str) -> String {
+    let space = |c: char| c.is_ascii_whitespace();
+    let mut out = String::with_capacity(html.len());
+    let mut rest = html;
+    while let Some(start) = rest.find('<') {
+        out.push_str(&rest[..start]);
+        rest = &rest[start..];
+        if rest.starts_with("<!--") {
+            let end = rest[4..].find("-->").map_or(rest.len(), |i| i + 7);
+            out.push_str(&rest[..end]);
+            rest = &rest[end..];
+            continue;
+        }
+        if !rest[1..].starts_with(|c: char| c.is_ascii_alphabetic()) {
+            out.push('<');
+            rest = &rest[1..];
+            continue;
+        }
+        let name_end = rest
+            .find(|c: char| space(c) || c == '/' || c == '>')
+            .unwrap_or(rest.len());
+        let tag = rest[1..name_end].to_ascii_lowercase();
+        out.push_str(&rest[..name_end]);
+        rest = &rest[name_end..];
+        loop {
+            let attribute = rest.trim_start_matches(|c: char| space(c) || c == '/');
+            out.push_str(&rest[..rest.len() - attribute.len()]);
+            rest = attribute;
+            if rest.is_empty() || rest.starts_with('>') {
+                break;
+            }
+            // An attribute name may start with '=', so always take one character.
+            let first = rest.chars().next().unwrap().len_utf8();
+            let name_end = rest[first..]
+                .find(|c: char| space(c) || matches!(c, '/' | '>' | '='))
+                .map_or(rest.len(), |i| i + first);
+            let name = &rest[..name_end];
+            out.push_str(name);
+            rest = &rest[name_end..];
+            let Some(value) = rest.trim_start_matches(space).strip_prefix('=') else {
+                continue;
+            };
+            let value = value.trim_start_matches(space);
+            out.push_str(&rest[..rest.len() - value.len()]);
+            rest = value;
+            let (quote, value) = match rest.chars().next() {
+                Some(quote @ ('"' | '\'')) => {
+                    let end = rest[1..].find(quote).map_or(rest.len(), |i| i + 1);
+                    (&rest[..1], &rest[1..end])
+                }
+                _ => (
+                    "",
+                    &rest[..rest
+                        .find(|c: char| space(c) || c == '>')
+                        .unwrap_or(rest.len())],
+                ),
+            };
+            out.push_str(quote);
+            let url = value.trim_start_matches(space);
+            if (name.eq_ignore_ascii_case("href") || name.eq_ignore_ascii_case("src"))
+                && relative(url)
+            {
+                out.push_str(&value[..value.len() - url.len()]);
+                out.push_str(base);
+                out.push_str(url);
+            } else {
+                out.push_str(value);
+            }
+            rest = &rest[quote.len() + value.len()..];
+            if !quote.is_empty() && rest.starts_with(quote) {
+                out.push_str(quote);
+                rest = &rest[1..];
+            }
+        }
+        if tag == "script" || tag == "style" {
+            let end = rest
+                .to_ascii_lowercase()
+                .find(&format!("</{tag}"))
+                .unwrap_or(rest.len());
+            out.push_str(&rest[..end]);
+            rest = &rest[end..];
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 pub fn build(site: Site) -> Result<Snapshot, Failure> {
@@ -167,7 +292,7 @@ pub fn build_cached(mut site: Site, previous: Option<&Snapshot>) -> Result<Snaps
                     source.push_str(&format!("- [{}]({})\n", md_label(&label), url(&link)));
                 }
                 Route::Page {
-                    html: shell(&site, &route, &title, None, None, &markdown(&source)).into(),
+                    html: shell(&site, &route, &title, None, &markdown(&source)).into(),
                     markdown: source.into_bytes().into(),
                 }
             }
@@ -188,7 +313,7 @@ pub fn build_cached(mut site: Site, previous: Option<&Snapshot>) -> Result<Snaps
             &mut routes,
             "/skills/".into(),
             Route::Page {
-                html: shell(&site, "/skills/", "Skills", None, None, &markdown(source)).into(),
+                html: shell(&site, "/skills/", "Skills", None, &markdown(source)).into(),
                 markdown: Arc::from(source.as_bytes()),
             },
             &mut errors,
@@ -281,10 +406,11 @@ pub(crate) fn insert(
 }
 
 fn page_route(site: &Site, path: &str, page: &Page) -> Route {
+    // Bundle pages resolve relative URLs against the bundle folder.
     let base = page
         .bundle
-        .then(|| format!("/skills/{}/", page.skill.as_ref().unwrap()));
-    let mut body = markdown(&page.body);
+        .then(|| url(&format!("/skills/{}/", page.skill.as_ref().unwrap())));
+    let mut body = render_markdown(&page.body, base.as_deref());
     if let Some(slug) = &page.skill {
         body.push_str(&format!(
             "<p><a download href=\"{}\">Download skill (.skill)</a></p>",
@@ -292,15 +418,7 @@ fn page_route(site: &Site, path: &str, page: &Page) -> Route {
         ));
     }
     Route::Page {
-        html: shell(
-            site,
-            path,
-            &page.title,
-            page.description.as_deref(),
-            base.as_deref(),
-            &body,
-        )
-        .into(),
+        html: shell(site, path, &page.title, page.description.as_deref(), &body).into(),
         markdown: page.source.clone(),
     }
 }
@@ -340,14 +458,7 @@ fn entries(site: &Site, dir: &str) -> BTreeMap<String, String> {
     entries
 }
 
-fn shell(
-    site: &Site,
-    path: &str,
-    title: &str,
-    description: Option<&str>,
-    base: Option<&str>,
-    body: &str,
-) -> String {
+fn shell(site: &Site, path: &str, title: &str, description: Option<&str>, body: &str) -> String {
     let site_title = site.config.title.as_deref().unwrap_or("Documentation");
     let mut html = format!(
         "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>{} — {}</title><meta property=\"og:title\" content=\"{}\"><meta property=\"og:site_name\" content=\"{}\"><meta property=\"og:type\" content=\"website\">",
@@ -356,9 +467,6 @@ fn shell(
         escape(title),
         escape(site_title)
     );
-    if let Some(base) = base {
-        html.push_str(&format!("<base href=\"{}\">", escape(&url(base))));
-    }
     if let Some(description) = description {
         html.push_str(&format!("<meta name=\"description\" content=\"{0}\"><meta property=\"og:description\" content=\"{0}\">", escape(description)));
     }

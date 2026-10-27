@@ -13,7 +13,7 @@ curl --fail --silent --show-error -D - http://127.0.0.1:8080/skills/serve-auxesi
 
 The response has status `200` and a `text/html` content type.
 The body includes the skill instructions and a `.skill` download link.
-The HTML head includes `<base href="/skills/serve-auxesia/">`.
+Relative links in the body start with `/skills/serve-auxesia/`. Fragment links such as `#install` stay on the page.
 
 ## Original Markdown
 

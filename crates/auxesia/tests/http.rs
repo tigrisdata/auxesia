@@ -304,8 +304,8 @@ async fn bundles_skills_with_original_sources_and_raw_supporting_files() {
     let app = App::open(root.path(), false).unwrap();
     let (_, _, body) = request(&app, "/skills/deploy.md", None, "GET").await;
     let html = String::from_utf8(body).unwrap();
-    assert!(html.contains("<base href=\"/skills/deploy/\">"));
-    assert!(html.contains("<img src=\"diagram.svg\">"));
+    assert!(!html.contains("<base"));
+    assert!(html.contains("<img src=\"/skills/deploy/diagram.svg\">"));
     assert!(html.contains("og:title\" content=\"Deploy &amp; run\""));
     assert!(!html.contains(">notes.md</a></li>"));
     let (_, _, notes) = request(&app, "/skills/deploy/notes.md", None, "GET").await;
@@ -473,6 +473,62 @@ async fn directory_aliases_prefer_index_and_hidden_index_does_not_hide_children(
             .unwrap()
             .contains("Readme body")
     );
+}
+
+#[tokio::test]
+async fn bundle_links_resolve_to_the_bundle_but_fragments_stay_on_the_page() {
+    let root = TempDir::new().unwrap();
+    put(
+        &root,
+        "skills/serve-auxesia/SKILL.md",
+        concat!(
+            "---\nname: Serve\n---\n",
+            "## Install\n\n",
+            "[see](#install) [notes](notes.md) [up](../other.md) [query](?q=1)\n",
+            "[root](/guide.md) [web](https://example.com/x) [mail](mailto:a@example.com)\n",
+            "[net](//example.com/y) ![Diagram](img/diagram.svg)\n\n",
+            "<a href='notes.md'>single</a> <a href=notes.md>bare</a> <a href=\"#install\">frag</a>\n\n",
+            "<div><img alt=\"x\" SRC=\"img/diagram.svg\"><!-- <a href=\"comment.md\"> --></div>\n\n",
+            "    <a href=\"code.md\">code</a>\n",
+        ),
+    );
+    put(&root, "skills/serve-auxesia/notes.md", "Notes");
+    let app = App::open(root.path(), false).unwrap();
+    let html = String::from_utf8(
+        request(&app, "/skills/serve-auxesia.md", None, "GET")
+            .await
+            .2,
+    )
+    .unwrap();
+    let main = html
+        .split("<main id=\"main\">")
+        .nth(1)
+        .unwrap()
+        .split("</main>")
+        .next()
+        .unwrap();
+    assert!(!html.contains("<base"));
+    for expected in [
+        "href=\"#install\"",
+        "<a href=\"#install\">see</a>",
+        "<a href=\"/skills/serve-auxesia/notes.md\">notes</a>",
+        "<a href=\"/skills/serve-auxesia/../other.md\">up</a>",
+        "<a href=\"?q=1\">query</a>",
+        "<a href=\"/guide.md\">root</a>",
+        "<a href=\"https://example.com/x\">web</a>",
+        "<a href=\"mailto:a@example.com\">mail</a>",
+        "<a href=\"//example.com/y\">net</a>",
+        "<img src=\"/skills/serve-auxesia/img/diagram.svg\" alt=\"Diagram\" />",
+        "<a href='/skills/serve-auxesia/notes.md'>single</a>",
+        "<a href=/skills/serve-auxesia/notes.md>bare</a>",
+        "<a href=\"#install\">frag</a>",
+        "<img alt=\"x\" SRC=\"/skills/serve-auxesia/img/diagram.svg\">",
+        "<!-- <a href=\"comment.md\"> -->",
+        "&lt;a href=&quot;code.md&quot;&gt;code&lt;/a&gt;",
+    ] {
+        assert!(main.contains(expected), "missing {expected}: {main}");
+    }
+    assert!(!main.contains("/skills/serve-auxesia/#"));
 }
 
 #[tokio::test]
