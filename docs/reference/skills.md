@@ -39,7 +39,7 @@ These names can differ, but a matching name makes the archive easier to use.
 ```yaml
 ---
 name: serve-auxesia
-description: Build Auxesia and inspect its documentation responses.
+description: Run Auxesia from its Docker image and inspect its documentation responses.
 ---
 ```
 
@@ -119,5 +119,5 @@ ignore:
 ## Example bundle
 
 The repository includes a [serve-auxesia skill](/skills/serve-auxesia.md).
-It builds the project, serves `docs`, and describes response checks.
+It runs `ghcr.io/tigrisdata/auxesia`, serves the bundled documentation or a mounted folder, and describes response checks.
 The [download](/skills/serve-auxesia.skill) includes its supporting reference file.

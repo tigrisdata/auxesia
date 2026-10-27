@@ -1,7 +1,8 @@
 # Response checks
 
-These commands use `http://127.0.0.1:8080` and the sample bundle from the Auxesia repository.
-Run them while the server serves the `docs` directory.
+These commands use `http://127.0.0.1:8080` and the documentation bundled in `ghcr.io/tigrisdata/auxesia`.
+Run them while the container serves its bundled `/docs` folder, without a replacement mount.
+No source checkout is required. If you changed the host port, adjust each URL and the Python `base` value.
 
 ## HTML
 
@@ -64,13 +65,19 @@ curl --fail --silent --show-error \
   http://127.0.0.1:8080/skills/serve-auxesia.skill
 ```
 
-Inspect its entries and compare them with the local source:
+Inspect its entries and compare them with the source served by the same container:
 
 ```sh
 python3 - "$skill_check_dir/serve-auxesia.skill" <<'PY'
-from pathlib import Path
 import sys
 import zipfile
+from urllib.request import Request, urlopen
+
+base = "http://127.0.0.1:8080"
+sources = {
+    "serve-auxesia/SKILL.md": "/skills/serve-auxesia.md",
+    "serve-auxesia/references/checks.md": "/skills/serve-auxesia/references/checks.md",
+}
 
 with zipfile.ZipFile(sys.argv[1]) as archive:
     names = archive.namelist()
@@ -79,14 +86,14 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
         "serve-auxesia/references/checks.md",
     ], names
     for name in names:
-        relative = name.removeprefix("serve-auxesia/")
-        source = Path("docs/skills/serve-auxesia") / relative
-        assert archive.read(name) == source.read_bytes(), name
+        request = Request(base + sources[name], headers={"Accept": "text/markdown"})
+        with urlopen(request, timeout=10) as response:
+            assert archive.read(name) == response.read(), name
         print(name)
-print("Archive entries match the source files.")
+print("Archive entries match the served source files.")
 PY
 ```
 
-The command prints both entries and `Archive entries match the source files.`.
+The command prints both entries and `Archive entries match the served source files.`.
 Each archive entry starts with `serve-auxesia/`.
 An agent can read the instructions and supporting file after extraction.
