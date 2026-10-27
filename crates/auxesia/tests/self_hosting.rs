@@ -15,7 +15,7 @@ async fn serves_its_own_documentation_without_diagnostics() {
     let snapshot = render::build(content::build(&root).unwrap()).unwrap();
     assert!(snapshot.warnings.is_empty(), "{:?}", snapshot.warnings);
     assert!(site.pages.contains_key("/getting-started.md"));
-    assert!(site.pages.contains_key("/skills/serve-auxesia.md"));
+    assert!(site.pages.contains_key("/skills/serve-auxesia"));
     assert!(!snapshot.routes.contains_key("/plans/auxesia-v1.md"));
     assert!(!snapshot.routes.contains_key("/plans/"));
     for page in site.pages.values() {

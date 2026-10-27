@@ -98,4 +98,4 @@ The configuration file is optional. Without it, Auxesia uses the root folder nam
 - [Configure the site](/reference/configuration.md).
 - [Read the HTTP reference](/reference/http.md) for routes and response formats.
 - [Read the operations reference](/reference/operations.md) for server behavior.
-- [Publish skills](/reference/skills.md), or read the [example skill](/skills/serve-auxesia.md).
+- [Publish skills](/reference/skills.md), or read the [example skill](/skills/serve-auxesia).

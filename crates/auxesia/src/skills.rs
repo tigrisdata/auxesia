@@ -6,7 +6,7 @@ use comrak::{Arena, nodes::NodeValue, parse_document};
 use percent_encoding::percent_decode_str;
 use sha2::{Digest, Sha256};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     io::{Cursor, Write},
     sync::Arc,
 };
@@ -41,14 +41,17 @@ pub fn publish(
         let Some(slug) = &page.skill else {
             continue;
         };
+        let mut aliases = BTreeSet::from([format!("/skills/{slug}.md")]);
         if page.bundle {
-            for alias in [
+            aliases.extend([
                 format!("/skills/{slug}/SKILL.md"),
                 format!("/skills/{slug}/"),
-                format!("/skills/{slug}"),
-            ] {
-                insert(routes, alias, Route::Redirect(path.clone()), errors);
-            }
+            ]);
+        } else {
+            aliases.insert(format!("/{}", page.source_path));
+        }
+        for alias in aliases {
+            insert(routes, alias, Route::Redirect(path.clone()), errors);
         }
         let entries = files(site, page);
         let mut hash = Sha256::new();

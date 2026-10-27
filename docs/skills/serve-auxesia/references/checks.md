@@ -9,7 +9,7 @@ No source checkout is required. If you changed the host port, adjust each URL an
 Request the skill page:
 
 ```sh
-curl --fail --silent --show-error -D - http://127.0.0.1:8080/skills/serve-auxesia.md
+curl --fail --silent --show-error -D - http://127.0.0.1:8080/skills/serve-auxesia
 ```
 
 The response has status `200` and a `text/html` content type.
@@ -23,7 +23,7 @@ Request the same page as Markdown:
 ```sh
 curl --fail --silent --show-error \
   -H 'Accept: text/markdown' \
-  http://127.0.0.1:8080/skills/serve-auxesia.md
+  http://127.0.0.1:8080/skills/serve-auxesia
 ```
 
 The body starts with the original YAML frontmatter.
@@ -39,7 +39,7 @@ curl --fail --silent --show-error http://127.0.0.1:8080/llms.txt
 ```
 
 The response includes documentation and skill sections.
-The skill section lists `/skills/serve-auxesia.md` and `/skills/serve-auxesia.skill`.
+The skill section lists `/skills/serve-auxesia` and `/skills/serve-auxesia.skill`.
 The document explains Markdown requests and states that Auxesia does not run skills.
 
 ## Supporting file
@@ -75,7 +75,7 @@ from urllib.request import Request, urlopen
 
 base = "http://127.0.0.1:8080"
 sources = {
-    "serve-auxesia/SKILL.md": "/skills/serve-auxesia.md",
+    "serve-auxesia/SKILL.md": "/skills/serve-auxesia",
     "serve-auxesia/references/checks.md": "/skills/serve-auxesia/references/checks.md",
 }
 

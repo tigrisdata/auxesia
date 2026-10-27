@@ -410,13 +410,14 @@ fn page_route(site: &Site, path: &str, page: &Page) -> Route {
     let base = page
         .bundle
         .then(|| url(&format!("/skills/{}/", page.skill.as_ref().unwrap())));
-    let mut body = render_markdown(&page.body, base.as_deref());
+    let mut body = String::new();
     if let Some(slug) = &page.skill {
         body.push_str(&format!(
-            "<p><a download href=\"{}\">Download skill (.skill)</a></p>",
+            "<p><a class=\"skill-download\" download href=\"{}\">Download skill (.skill)</a></p>",
             escape(&url(&format!("/skills/{slug}.skill")))
         ));
     }
+    body.push_str(&render_markdown(&page.body, base.as_deref()));
     Route::Page {
         html: shell(site, path, &page.title, page.description.as_deref(), &body).into(),
         markdown: page.source.clone(),

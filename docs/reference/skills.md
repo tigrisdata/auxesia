@@ -7,6 +7,7 @@ description: Publish agent instructions as Markdown pages and downloadable skill
 
 Auxesia publishes instructions for agents. It never runs a skill or a script from a skill bundle.
 The HTML pages and `/llms.txt` explain how agents can find pages and download skills.
+Each skill page has a download button above its instructions.
 
 ## Source layout
 
@@ -49,15 +50,15 @@ With `docs` as the content root, the sample bundle has these routes:
 
 | Route | Response |
 | --- | --- |
-| `/skills/serve-auxesia.md` | HTML page, or original Markdown with `Accept: text/markdown` |
+| `/skills/serve-auxesia` | HTML page, or original Markdown with `Accept: text/markdown` |
 | `/skills/serve-auxesia.skill` | Downloadable ZIP archive |
-| `/skills/serve-auxesia/SKILL.md` | Redirect to the canonical `/skills/serve-auxesia.md` page |
+| `/skills/serve-auxesia/SKILL.md` | Redirect to the canonical `/skills/serve-auxesia` page |
 | `/skills/serve-auxesia/` | Redirect to the canonical page |
-| `/skills/serve-auxesia` | Redirect to the canonical page |
+| `/skills/serve-auxesia.md` | Redirect to the canonical page |
 | `/skills/serve-auxesia/references/checks.md` | Raw supporting Markdown |
 
-A standalone `docs/skills/inspect-docs.md` uses `/skills/inspect-docs.md` and `/skills/inspect-docs.skill`.
-The folder aliases apply only to bundles.
+A standalone `docs/skills/inspect-docs.md` uses `/skills/inspect-docs` and `/skills/inspect-docs.skill`.
+The `.md` URL redirects to the canonical page for both forms. Folder aliases apply only to bundles.
 Do not create both forms with the same slug. Their canonical routes conflict.
 
 The files `skills/index.md` and `skills/README.md` are not skills.
@@ -118,6 +119,6 @@ ignore:
 
 ## Example bundle
 
-The repository includes a [serve-auxesia skill](/skills/serve-auxesia.md).
+The repository includes a [serve-auxesia skill](/skills/serve-auxesia).
 It runs `ghcr.io/tigrisdata/auxesia`, serves the bundled documentation or a mounted folder, and describes response checks.
 The [download](/skills/serve-auxesia.skill) includes its supporting reference file.

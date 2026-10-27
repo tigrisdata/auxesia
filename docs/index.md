@@ -29,7 +29,7 @@ The Markdown response includes the original YAML frontmatter. The server also pu
 - [Get started](/getting-started.md): Run this site, install Auxesia, and create a documentation folder.
 - [Write pages](/authoring.md): Add frontmatter, links, assets, and directory pages.
 - [Deploy with Docker](/deployment.md): Build an image and serve a mounted documentation folder.
-- [Serve Auxesia skill](/skills/serve-auxesia.md): Read the example skill and download its archive.
+- [Serve Auxesia skill](/skills/serve-auxesia): Read the example skill and download its archive.
 
 ## Reference
 

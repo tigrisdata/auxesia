@@ -77,9 +77,9 @@ Other directory routes end with `/`, such as `/guides/`.
 The corresponding path without `/` returns `307 Temporary Redirect`.
 Redirects preserve the query string.
 
-Bundle aliases also return `307 Temporary Redirect` to `/skills/SLUG.md`:
+Skill pages use `/skills/SLUG` as their canonical URL. The `/skills/SLUG.md` URL redirects there for both standalone skills and bundles.
+Bundle aliases also return `307 Temporary Redirect` to `/skills/SLUG`:
 
-- `/skills/SLUG`
 - `/skills/SLUG/`
 - `/skills/SLUG/SKILL.md`
 

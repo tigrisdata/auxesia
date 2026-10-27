@@ -90,7 +90,7 @@ fn skill_entrypoint_name_is_case_sensitive_on_every_platform() {
     assert!(site.bundles.is_empty(), "{:?}", site.bundles);
     let page = &site.pages["/skills/task/skill.md"];
     assert_eq!(page.skill, None);
-    assert!(!site.pages.contains_key("/skills/task.md"));
+    assert!(!site.pages.contains_key("/skills/task"));
 }
 
 #[test]

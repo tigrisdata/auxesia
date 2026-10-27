@@ -372,7 +372,7 @@ pub fn from_capture(captured: Capture) -> Result<Site, Failure> {
                 let route = page
                     .skill
                     .as_ref()
-                    .map(|s| format!("/skills/{s}.md"))
+                    .map(|s| format!("/skills/{s}"))
                     .unwrap_or_else(|| format!("/{path}"));
                 if pages.insert(route.clone(), page).is_some() {
                     failure

@@ -37,6 +37,47 @@ async fn request(
 }
 
 #[tokio::test]
+async fn skill_pages_use_extensionless_urls_and_offer_download_buttons() {
+    let root = TempDir::new().unwrap();
+    let source = "---\nname: Deploy\ndescription: Deploy a service\n---\n# Deploy\nInstructions";
+    put(&root, "skills/deploy/SKILL.md", source);
+    put(
+        &root,
+        "skills/inspect.md",
+        "---\nname: Inspect\n---\n# Inspect",
+    );
+    let app = App::open(root.path(), false).unwrap();
+    for slug in ["deploy", "inspect"] {
+        let path = format!("/skills/{slug}");
+        let (status, _, body) = request(&app, &path, None, "GET").await;
+        assert_eq!(status, StatusCode::OK);
+        let html = String::from_utf8(body).unwrap();
+        assert!(html.contains(&format!(
+            "class=\"skill-download\" download href=\"/skills/{slug}.skill\""
+        )));
+        let main = html.split("<main id=\"main\">").nth(1).unwrap();
+        assert!(main.find("class=\"skill-download\"").unwrap() < main.find("<h1").unwrap());
+        let (status, headers, _) =
+            request(&app, &format!("{path}.md?source=yes"), None, "GET").await;
+        assert_eq!(status, StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(headers["location"], format!("{path}?source=yes"));
+        assert_eq!(
+            request(&app, &format!("{path}.skill"), None, "GET").await.0,
+            StatusCode::OK
+        );
+    }
+    assert_eq!(
+        request(&app, "/skills/deploy", Some("text/markdown"), "GET")
+            .await
+            .2,
+        source.as_bytes()
+    );
+    let llms = String::from_utf8(request(&app, "/llms.txt", None, "GET").await.2).unwrap();
+    assert!(llms.contains("[Deploy](/skills/deploy)"));
+    assert!(!llms.contains("/skills/deploy.md"));
+}
+
+#[tokio::test]
 async fn browser_title_does_not_repeat_the_site_title() {
     let root = TempDir::new().unwrap();
     put(&root, ".auxesia.yaml", "title: 'Docs & guides'\n");
@@ -315,7 +356,7 @@ async fn bundles_skills_with_original_sources_and_raw_supporting_files() {
     let single = "---\nname: Inspect\n---\nInspect the service\n";
     put(&root, "skills/inspect.md", single);
     let app = App::open(root.path(), false).unwrap();
-    let (_, _, body) = request(&app, "/skills/deploy.md", None, "GET").await;
+    let (_, _, body) = request(&app, "/skills/deploy", None, "GET").await;
     let html = String::from_utf8(body).unwrap();
     assert!(!html.contains("<base"));
     assert!(html.contains("<img src=\"/skills/deploy/diagram.svg\">"));
@@ -326,7 +367,7 @@ async fn bundles_skills_with_original_sources_and_raw_supporting_files() {
     for path in ["/skills/deploy/", "/skills/deploy/SKILL.md"] {
         let (status, headers, _) = request(&app, path, None, "GET").await;
         assert_eq!(status, StatusCode::TEMPORARY_REDIRECT);
-        assert_eq!(headers["location"], "/skills/deploy.md");
+        assert_eq!(headers["location"], "/skills/deploy");
     }
     for (slug, count) in [("deploy", 3), ("inspect", 1)] {
         let path = format!("/skills/{slug}.skill");
@@ -507,12 +548,8 @@ async fn bundle_links_resolve_to_the_bundle_but_fragments_stay_on_the_page() {
     );
     put(&root, "skills/serve-auxesia/notes.md", "Notes");
     let app = App::open(root.path(), false).unwrap();
-    let html = String::from_utf8(
-        request(&app, "/skills/serve-auxesia.md", None, "GET")
-            .await
-            .2,
-    )
-    .unwrap();
+    let html =
+        String::from_utf8(request(&app, "/skills/serve-auxesia", None, "GET").await.2).unwrap();
     let main = html
         .split("<main id=\"main\">")
         .nth(1)
