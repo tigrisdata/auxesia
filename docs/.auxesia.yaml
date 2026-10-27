@@ -1,0 +1,9 @@
+title: Auxesia
+subtitle: Markdown documentation and downloadable skills
+ignore:
+  - plans/**
+llms:
+  header: |
+    These pages describe Auxesia and come from its own docs folder.
+    Start with /getting-started.md to run this site locally.
+    Read /reference/skills.md before you publish or download a skill.
