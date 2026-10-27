@@ -628,3 +628,33 @@ async fn skill_downloads_name_non_ascii_and_spaced_files() {
         assert_eq!(headers["content-disposition"], expected);
     }
 }
+
+#[tokio::test]
+async fn head_matches_get_headers_without_a_body() {
+    let root = TempDir::new().unwrap();
+    put(&root, "index.md", "---\ntitle: Home\n---\n# Home\n");
+    put(&root, "skills/deploy.md", "---\nname: Deploy\n---\nGo");
+    put(&root, "notes.txt", "plain notes");
+    let app = App::open(root.path(), false).unwrap();
+    for (path, accept) in [
+        ("/", None),
+        ("/", Some("text/markdown")),
+        ("/skills/deploy.skill", None),
+        ("/notes.txt", None),
+        ("/missing", None),
+        ("/", Some("application/json")),
+    ] {
+        let (status, headers, body) = request(&app, path, accept, "GET").await;
+        let (head_status, head_headers, head_body) = request(&app, path, accept, "HEAD").await;
+        assert_eq!(head_status, status, "{path}");
+        assert!(head_body.is_empty(), "{path}");
+        assert!(!body.is_empty(), "{path}");
+        assert_eq!(headers["content-length"], body.len().to_string(), "{path}");
+        assert_eq!(head_headers["content-length"], body.len().to_string());
+        assert_eq!(head_headers["content-type"], headers["content-type"]);
+        assert_eq!(
+            head_headers.get("content-disposition"),
+            headers.get("content-disposition")
+        );
+    }
+}

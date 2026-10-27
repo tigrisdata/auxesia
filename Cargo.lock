@@ -81,9 +81,11 @@ name = "auxesia"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "bytes",
  "clap",
  "comrak",
  "globset",
+ "http-body",
  "http-body-util",
  "mime_guess",
  "percent-encoding",

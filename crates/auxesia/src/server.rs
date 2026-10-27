@@ -10,10 +10,16 @@ use axum::{
     http::{HeaderMap, HeaderValue, Method, StatusCode, Uri, header},
     response::Response,
 };
+use bytes::Bytes;
+use http_body::{Frame, SizeHint};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use std::{
+    collections::VecDeque,
+    convert::Infallible,
     path::{Path, PathBuf},
+    pin::Pin,
     sync::{Arc, Mutex, RwLock},
+    task::{Context, Poll},
 };
 use tokio::sync::watch;
 
@@ -102,7 +108,7 @@ async fn handle(
         let mut res = response(
             StatusCode::METHOD_NOT_ALLOWED,
             "text/plain; charset=utf-8",
-            b"Method not allowed\n".to_vec(),
+            vec![Bytes::from_static(b"Method not allowed\n")],
             false,
         );
         res.headers_mut()
@@ -115,7 +121,7 @@ async fn handle(
         return response(
             StatusCode::BAD_REQUEST,
             "text/plain",
-            b"Invalid path\n".to_vec(),
+            vec![Bytes::from_static(b"Invalid path\n")],
             head,
         );
     };
@@ -123,7 +129,7 @@ async fn handle(
         return response(
             StatusCode::NOT_FOUND,
             "text/plain",
-            b"Not found\n".to_vec(),
+            vec![Bytes::from_static(b"Not found\n")],
             head,
         );
     };
@@ -144,7 +150,7 @@ async fn handle(
             content_type,
             download,
         } => {
-            let mut res = response(StatusCode::OK, content_type, bytes.to_vec(), head);
+            let mut res = response(StatusCode::OK, content_type, vec![shared(bytes)], head);
             if let Some(name) = download {
                 res.headers_mut()
                     .insert(header::CONTENT_DISPOSITION, attachment(name));
@@ -162,30 +168,30 @@ async fn handle(
                 Some(true) => response(
                     StatusCode::OK,
                     "text/markdown; charset=utf-8",
-                    markdown.to_vec(),
+                    vec![shared(markdown)],
                     head,
                 ),
                 Some(false) => {
-                    let mut body = html.to_string();
+                    let mut body = vec![shared(&Arc::<[u8]>::from(html.clone()))];
                     if app.dev && !state.errors.is_empty() {
-                        body.push_str("<aside class=\"auxesia-errors\" role=\"alert\"><strong>Update failed. Serving the last valid site.</strong><ul>");
+                        let mut aside = String::from(
+                            "<aside class=\"auxesia-errors\" role=\"alert\"><strong>Update failed. Serving the last valid site.</strong><ul>",
+                        );
                         for error in &state.errors {
-                            body.push_str(&format!("<li>{}</li>", render::escape(error)));
+                            aside.push_str(&format!("<li>{}</li>", render::escape(error)));
                         }
-                        body.push_str("</ul><p>Fix these errors and reload.</p></aside>");
+                        aside.push_str("</ul><p>Fix these errors and reload.</p></aside>");
+                        body.push(Bytes::from(aside));
                     }
-                    body.push_str("</body></html>");
-                    response(
-                        StatusCode::OK,
-                        "text/html; charset=utf-8",
-                        body.into_bytes(),
-                        head,
-                    )
+                    body.push(Bytes::from_static(b"</body></html>"));
+                    response(StatusCode::OK, "text/html; charset=utf-8", body, head)
                 }
                 None => response(
                     StatusCode::NOT_ACCEPTABLE,
                     "text/plain",
-                    b"Available representations: text/html, text/markdown\n".to_vec(),
+                    vec![Bytes::from_static(
+                        b"Available representations: text/html, text/markdown\n",
+                    )],
                     head,
                 ),
             };
@@ -196,18 +202,47 @@ async fn handle(
     }
 }
 
-fn response(status: StatusCode, content_type: &str, bytes: Vec<u8>, head: bool) -> Response {
+// Bodies are lists of chunks so cached content is sent without copying it.
+fn response(status: StatusCode, content_type: &str, chunks: Vec<Bytes>, head: bool) -> Response {
+    let length: usize = chunks.iter().map(Bytes::len).sum();
     Response::builder()
         .status(status)
         .header(header::CONTENT_TYPE, content_type)
-        .header(header::CONTENT_LENGTH, bytes.len())
+        .header(header::CONTENT_LENGTH, length)
         .header(header::CACHE_CONTROL, "no-store")
         .body(if head {
             Body::empty()
         } else {
-            Body::from(bytes)
+            Body::new(Chunks(chunks.into()))
         })
         .unwrap()
+}
+
+// The returned bytes keep the cached allocation alive instead of copying it.
+fn shared(data: &Arc<[u8]>) -> Bytes {
+    Bytes::from_owner(data.clone())
+}
+
+struct Chunks(VecDeque<Bytes>);
+
+impl http_body::Body for Chunks {
+    type Data = Bytes;
+    type Error = Infallible;
+
+    fn poll_frame(
+        mut self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Bytes>, Infallible>>> {
+        Poll::Ready(self.0.pop_front().map(|chunk| Ok(Frame::data(chunk))))
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        SizeHint::with_exact(self.0.iter().map(|chunk| chunk.len() as u64).sum())
+    }
 }
 
 // RFC 6266 `attr-char`: everything else is percent-encoded in `filename*`.
@@ -363,5 +398,36 @@ mod tests {
             panic!("page");
         };
         assert!(html.contains("Changed"));
+    }
+
+    #[tokio::test]
+    async fn responses_share_cached_bodies_instead_of_copying() {
+        use http_body_util::BodyExt;
+        use tower::ServiceExt;
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("index.md"), "---\ntitle: Home\n---\nHome").unwrap();
+        std::fs::write(root.path().join("notes.txt"), "plain notes").unwrap();
+        let app = App::open(root.path(), false).unwrap();
+        let state = app.state.read().unwrap().clone();
+        for (path, accept, cached) in [
+            ("/notes.txt", "*/*", "/notes.txt"),
+            ("/", "text/markdown", "/"),
+            ("/", "text/html", "/"),
+        ] {
+            let expected = match &state.snapshot.routes[cached] {
+                Route::Blob { bytes, .. } => bytes.as_ptr(),
+                Route::Page { markdown, .. } if accept == "text/markdown" => markdown.as_ptr(),
+                Route::Page { html, .. } => html.as_ptr(),
+                Route::Redirect(_) => panic!("redirect"),
+            };
+            let request = axum::http::Request::builder()
+                .uri(path)
+                .header(header::ACCEPT, accept)
+                .body(Body::empty())
+                .unwrap();
+            let mut body = app.router().oneshot(request).await.unwrap().into_body();
+            let chunk = body.frame().await.unwrap().unwrap().into_data().unwrap();
+            assert_eq!(chunk.as_ptr(), expected, "{path} {accept}");
+        }
     }
 }
