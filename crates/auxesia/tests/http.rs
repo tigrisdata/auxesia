@@ -597,3 +597,34 @@ async fn folders_without_published_files_have_no_directory_route() {
         StatusCode::OK
     );
 }
+
+#[tokio::test]
+async fn skill_downloads_name_non_ascii_and_spaced_files() {
+    let root = TempDir::new().unwrap();
+    put(&root, "skills/my skill.md", "---\nname: Spaced\n---\nGo");
+    put(
+        &root,
+        "skills/résumé/SKILL.md",
+        "---\nname: Resume\n---\nGo",
+    );
+    put(&root, "skills/say \"hi\".md", "---\nname: Quote\n---\nGo");
+    let app = App::open(root.path(), false).unwrap();
+    for (path, expected) in [
+        (
+            "/skills/my%20skill.skill",
+            "attachment; filename=\"my skill.skill\"; filename*=UTF-8''my%20skill.skill",
+        ),
+        (
+            "/skills/r%C3%A9sum%C3%A9.skill",
+            "attachment; filename=\"r_sum_.skill\"; filename*=UTF-8''r%C3%A9sum%C3%A9.skill",
+        ),
+        (
+            "/skills/say%20%22hi%22.skill",
+            "attachment; filename=\"say _hi_.skill\"; filename*=UTF-8''say%20%22hi%22.skill",
+        ),
+    ] {
+        let (status, headers, _) = request(&app, path, None, "GET").await;
+        assert_eq!(status, StatusCode::OK, "{path}");
+        assert_eq!(headers["content-disposition"], expected);
+    }
+}

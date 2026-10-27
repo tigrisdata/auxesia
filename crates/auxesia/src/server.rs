@@ -7,10 +7,10 @@ use axum::{
     Router,
     body::Body,
     extract::State,
-    http::{HeaderMap, Method, StatusCode, Uri, header},
+    http::{HeaderMap, HeaderValue, Method, StatusCode, Uri, header},
     response::Response,
 };
-use percent_encoding::percent_decode_str;
+use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex, RwLock},
@@ -146,12 +146,8 @@ async fn handle(
         } => {
             let mut res = response(StatusCode::OK, content_type, bytes.to_vec(), head);
             if let Some(name) = download {
-                res.headers_mut().insert(
-                    header::CONTENT_DISPOSITION,
-                    format!("attachment; filename=\"{}\"", render::url(name))
-                        .parse()
-                        .unwrap(),
-                );
+                res.headers_mut()
+                    .insert(header::CONTENT_DISPOSITION, attachment(name));
             }
             res
         }
@@ -212,6 +208,41 @@ fn response(status: StatusCode, content_type: &str, bytes: Vec<u8>, head: bool) 
             Body::from(bytes)
         })
         .unwrap()
+}
+
+// RFC 6266 `attr-char`: everything else is percent-encoded in `filename*`.
+const ATTR_CHAR: &AsciiSet = &NON_ALPHANUMERIC
+    .remove(b'!')
+    .remove(b'#')
+    .remove(b'$')
+    .remove(b'&')
+    .remove(b'+')
+    .remove(b'-')
+    .remove(b'.')
+    .remove(b'^')
+    .remove(b'_')
+    .remove(b'`')
+    .remove(b'|')
+    .remove(b'~');
+
+// Browsers do not decode `filename`, so it gets a plain ASCII fallback and the
+// exact UTF-8 name goes in `filename*` (RFC 5987).
+fn attachment(name: &str) -> HeaderValue {
+    let fallback: String = name
+        .chars()
+        .map(|c| match c {
+            '"' | '\\' | '%' => '_',
+            ' ' => c,
+            c if c.is_ascii_graphic() => c,
+            _ => '_',
+        })
+        .collect();
+    format!(
+        "attachment; filename=\"{fallback}\"; filename*=UTF-8''{}",
+        utf8_percent_encode(name, ATTR_CHAR)
+    )
+    .parse()
+    .unwrap()
 }
 
 fn decode_path(path: &str) -> Option<String> {
