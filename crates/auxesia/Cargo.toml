@@ -1,0 +1,22 @@
+[package]
+name = "auxesia"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync"] }
+clap = { version = "4", features = ["derive"] }
+comrak = { version = "0.57", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_yaml_ng = "0.10"
+globset = "0.4"
+sha2 = "0.10"
+mime_guess = "2"
+percent-encoding = "2"
+zip = { version = "6", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
