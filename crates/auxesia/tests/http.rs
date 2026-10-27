@@ -37,6 +37,48 @@ async fn request(
 }
 
 #[tokio::test]
+async fn footer_supports_markdown_defaults_and_removal() {
+    let root = TempDir::new().unwrap();
+    let source = "---\ntitle: Home\n---\nHome body";
+    put(&root, "index.md", source);
+    let app = App::open(root.path(), true).unwrap();
+    let html = String::from_utf8(request(&app, "/", None, "GET").await.2).unwrap();
+    assert!(html.contains("Powered by Auxesia"));
+    put(
+        &root,
+        ".auxesia.yaml",
+        "footer: '**Our docs** · [Contact](/contact.md)'\n",
+    );
+    for path in ["/", "/index.md", "/skills/"] {
+        let html = String::from_utf8(request(&app, path, None, "GET").await.2).unwrap();
+        let footer = html
+            .split("<footer id=\"footer\">")
+            .nth(1)
+            .unwrap()
+            .split("</footer>")
+            .next()
+            .unwrap();
+        assert!(footer.contains("<strong>Our docs</strong>"));
+        assert!(footer.contains("<a href=\"/contact.md\">Contact</a>"));
+        assert!(!footer.contains("Powered by Auxesia"));
+    }
+    assert_eq!(
+        request(&app, "/index.md", Some("text/markdown"), "GET")
+            .await
+            .2,
+        source.as_bytes()
+    );
+    put(&root, ".auxesia.yaml", "footer: 42\n");
+    let html = String::from_utf8(request(&app, "/", None, "GET").await.2).unwrap();
+    assert!(html.contains("<strong>Our docs</strong>"));
+    assert!(html.contains("auxesia-errors"));
+    put(&root, ".auxesia.yaml", "footer: ''\n");
+    let html = String::from_utf8(request(&app, "/", None, "GET").await.2).unwrap();
+    assert!(!html.contains("<footer"));
+    assert!(!html.contains("auxesia-errors"));
+}
+
+#[tokio::test]
 async fn header_uses_dot_for_index_and_sorts_links_by_title() {
     let root = TempDir::new().unwrap();
     for prefix in ["", "guide/"] {

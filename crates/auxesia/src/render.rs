@@ -419,6 +419,16 @@ fn shell(
             escape(GUIDANCE)
         ));
     }
-    html.push_str("</main><footer id=\"footer\">Powered by Auxesia</footer>");
+    html.push_str("</main>");
+    let footer = site
+        .config
+        .footer
+        .as_deref()
+        .unwrap_or("Powered by Auxesia");
+    if !footer.trim().is_empty() {
+        html.push_str("<footer id=\"footer\">");
+        html.push_str(&markdown(footer));
+        html.push_str("</footer>");
+    }
     html
 }

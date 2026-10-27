@@ -9,6 +9,8 @@ pub struct Config {
     #[serde(deserialize_with = "string")]
     pub subtitle: String,
     #[serde(deserialize_with = "optional_string")]
+    pub footer: Option<String>,
+    #[serde(deserialize_with = "optional_string")]
     pub stylesheet: Option<String>,
     #[serde(deserialize_with = "strings")]
     pub ignore: Vec<String>,

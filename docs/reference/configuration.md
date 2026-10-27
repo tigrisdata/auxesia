@@ -12,6 +12,7 @@ See [Getting started](/getting-started.md) for the command syntax.
 ```yaml
 title: Engineering handbook
 subtitle: Notes for our team
+footer: 'Maintained by **Engineering** · [Contact](/contact.md)'
 stylesheet: assets/custom.css
 ignore:
   - drafts
@@ -26,6 +27,7 @@ llms:
 | --- | --- | --- | --- |
 | `title` | String | Name of the root directory | Site title in the HTML header, metadata, and `/llms.txt`. An empty or whitespace-only title is an error. |
 | `subtitle` | String | Empty string | Text beside the site title in the HTML header. |
+| `footer` | Optional string | `Powered by Auxesia` | Markdown rendered in the footer. An empty or whitespace-only string hides the footer. |
 | `stylesheet` | Optional string | None | Path to a custom stylesheet, relative to the root. |
 | `ignore` | List of strings | Empty list | Glob patterns that exclude paths from the site. |
 | `llms` | Object | Object with an empty `header` | Configuration for `/llms.txt`. |
@@ -34,6 +36,21 @@ llms:
 Unknown fields are errors at both the top level and inside `llms`.
 Invalid YAML, invalid field types, and invalid glob patterns are errors.
 An absent configuration file uses all defaults.
+
+## Footer
+
+The `footer` field accepts Markdown, including links, emphasis, and trusted HTML.
+Use root-relative links so they work on nested pages and skill pages.
+Omit the field or set it to `null` to use the default text.
+
+```yaml
+footer: |
+  Maintained by **Engineering**.
+
+  [Contact](/contact.md) · [Source](https://github.com/example/project)
+```
+
+Set `footer: ''` to hide the footer. Markdown source responses do not include the footer.
 
 ## Custom stylesheet
 
