@@ -160,7 +160,6 @@ async fn handle(
         return res;
     }
     let head = method == Method::HEAD;
-    let state = app.refresh().await;
     let Some(path) = decode_path(uri.path()) else {
         return response(
             StatusCode::BAD_REQUEST,
@@ -169,6 +168,8 @@ async fn handle(
             head,
         );
     };
+    // An invalid path never names a file, so it does not need a scan.
+    let state = app.refresh().await;
     let Some(route) = state.snapshot.routes.get(&path) else {
         return response(
             StatusCode::NOT_FOUND,
@@ -473,6 +474,26 @@ mod tests {
             let chunk = body.frame().await.unwrap().unwrap().into_data().unwrap();
             assert_eq!(chunk.as_ptr(), expected, "{path} {accept}");
         }
+    }
+
+    #[tokio::test]
+    async fn invalid_paths_do_not_scan_the_source_tree() {
+        use tower::ServiceExt;
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("index.md"), "---\ntitle: Home\n---\nHome").unwrap();
+        let app = App::open(root.path(), true).unwrap();
+        let res = app
+            .router()
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/%zz")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        assert!(app.flight.lock().unwrap().is_none());
     }
 
     fn page_html(state: &ServingState) -> &str {

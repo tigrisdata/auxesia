@@ -26,14 +26,27 @@ Ctrl-C requests graceful shutdown.
 
 ## Request refreshes
 
-Each `GET` or `HEAD` request triggers a scan and read of the eligible source tree.
-Concurrent requests share an active refresh and wait for its result.
-The refresh continues after the initiating request ends.
-Unchanged input reuses the current snapshot.
+Each `GET` or `HEAD` request with a valid path starts a refresh.
+A refresh first computes a fingerprint from the metadata of the eligible source tree.
+The metadata is the path, size, and modification time of each file.
+On Unix, the metadata also includes the change time, inode, device, and mode.
+If the fingerprint is the same as for the current snapshot, Auxesia reuses that snapshot and reads no file contents.
 Unchanged skill contents reuse their archive bytes after unrelated edits.
 
-Before publication, Auxesia captures the source tree again and compares its fingerprint with the first capture.
-If the fingerprints differ, Auxesia retries once with the newer capture.
+Files that changed in the last two seconds are an exception.
+For these files, the fingerprint also includes a hash of the contents.
+A later edit can have the same timestamp as a recent change, so metadata alone cannot detect it.
+
+Concurrent requests share a refresh that has not started its scan.
+If a scan is in progress, a new request waits for the next refresh.
+That refresh starts after the current scan ends, and all requests that arrive during the scan share it.
+As a result, each response comes from a scan that started after the request arrived.
+The refresh continues after the initiating request ends.
+If a refresh stops before it publishes a result, the next request starts a new refresh.
+
+When the fingerprint is different, Auxesia reads the source tree once and builds a candidate.
+Before publication, Auxesia computes the fingerprint again and compares it with the first fingerprint.
+If the fingerprints are different, Auxesia retries once with a new read.
 If the second attempt also changes, Auxesia rejects that candidate.
 This comparison detects changes during the build but does not lock the source directory.
 
@@ -72,7 +85,8 @@ The `.auxesia.yaml` file also cannot be a symbolic link.
 Filenames must use UTF-8.
 Dot-prefixed files and directories are excluded, except for the separately read configuration file.
 
-The server captures file contents in memory and reads the source tree on requests.
+The server keeps file contents in memory.
+It reads the metadata of the source tree on requests and reads file contents only after a change.
 It targets modest documentation sites with local source files.
 Large files and large trees increase memory use and refresh work.
 Skill contents are instructions for the consumer.

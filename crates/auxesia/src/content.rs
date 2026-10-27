@@ -6,7 +6,12 @@ use std::{
     fs,
     path::Path,
     sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
+
+// A later edit can share a timestamp tick with a recent change, so recent files are hashed by content.
+// Two seconds covers the coarsest common timestamp resolution (FAT).
+const SETTLE: Duration = Duration::from_secs(2);
 
 #[derive(Clone, Debug, Default)]
 pub struct Failure {
@@ -35,6 +40,8 @@ pub struct Capture {
     pub bundles: BTreeSet<String>,
     pub fingerprint: [u8; 32],
     pub errors: Vec<String>,
+    stats: BTreeMap<String, Vec<u8>>,
+    unread: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -76,6 +83,20 @@ fn yes() -> bool {
 }
 
 pub fn capture(root: &Path) -> Capture {
+    capture_at(root, SystemTime::now())
+}
+
+/// Reads the eligible tree. Files changed after `now - SETTLE` count as recent.
+pub fn capture_at(root: &Path, now: SystemTime) -> Capture {
+    scan(root, now, true)
+}
+
+/// Returns the fingerprint that `capture_at` would compute, without reading settled files.
+pub fn stamp_at(root: &Path, now: SystemTime) -> [u8; 32] {
+    scan(root, now, false).fingerprint
+}
+
+fn scan(root: &Path, now: SystemTime, read: bool) -> Capture {
     let mut out = Capture {
         config: Config::default(),
         files: BTreeMap::new(),
@@ -83,6 +104,8 @@ pub fn capture(root: &Path) -> Capture {
         bundles: BTreeSet::new(),
         fingerprint: [0; 32],
         errors: Vec::new(),
+        stats: BTreeMap::new(),
+        unread: Vec::new(),
     };
     let mut hash = Sha256::new();
     let config_path = root.join(".auxesia.yaml");
@@ -125,10 +148,11 @@ pub fn capture(root: &Path) -> Capture {
             Config::default().ignores().unwrap()
         }
     };
-    walk(root, "", &ignore, &mut out);
+    walk(root, "", &ignore, now, read, &mut out);
     // A folder whose files are all ignored, hidden, or absent publishes no directory route.
+    // Use stats, not files: a metadata-only scan records stats but reads no contents.
     let occupied: BTreeSet<&str> = out
-        .files
+        .stats
         .keys()
         .flat_map(|path| path.match_indices('/').map(|(i, _)| &path[..i]))
         .collect();
@@ -139,12 +163,12 @@ pub fn capture(root: &Path) -> Capture {
         hash.update(dir.as_bytes());
         hash.update([0]);
     }
-    for (path, file) in &out.files {
+    for (path, stat) in &out.stats {
         hash.update(b"F");
         hash.update(path.as_bytes());
-        hash.update([0, file.executable as u8]);
-        hash.update((file.bytes.len() as u64).to_le_bytes());
-        hash.update(&file.bytes);
+        hash.update([0]);
+        hash.update((stat.len() as u64).to_le_bytes());
+        hash.update(stat);
     }
     out.errors.sort();
     for error in &out.errors {
@@ -152,10 +176,47 @@ pub fn capture(root: &Path) -> Capture {
         hash.update([0]);
     }
     out.fingerprint = hash.finalize().into();
+    // Read errors stay out of the fingerprint because a stamp does not read settled files.
+    out.errors.append(&mut out.unread);
+    out.errors.sort();
     out
 }
 
-fn walk(root: &Path, relative: &str, ignore: &globset::GlobSet, out: &mut Capture) {
+// Describes a file version from metadata. The flag is true when the version is too recent to trust.
+fn stat(metadata: &fs::Metadata, now: SystemTime) -> (Vec<u8>, bool) {
+    let mut stat = metadata.len().to_le_bytes().to_vec();
+    let modified = metadata.modified().ok();
+    let since = |time: SystemTime| time.duration_since(UNIX_EPOCH).unwrap_or_default();
+    stat.extend(modified.map_or(0, |t| since(t).as_nanos()).to_le_bytes());
+    #[allow(unused_mut)]
+    let mut newest = modified;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        // ctime also changes when a tool restores an old mtime.
+        stat.extend(metadata.ctime().to_le_bytes());
+        stat.extend(metadata.ctime_nsec().to_le_bytes());
+        stat.extend(metadata.ino().to_le_bytes());
+        stat.extend(metadata.dev().to_le_bytes());
+        stat.extend(metadata.mode().to_le_bytes());
+        let changed = u64::try_from(metadata.ctime())
+            .ok()
+            .map(|s| UNIX_EPOCH + Duration::new(s, metadata.ctime_nsec() as u32));
+        newest = newest.max(changed);
+    }
+    // An unknown time or a time in the future is never trusted.
+    let recent = newest.is_none_or(|time| time + SETTLE > now);
+    (stat, recent)
+}
+
+fn walk(
+    root: &Path,
+    relative: &str,
+    ignore: &globset::GlobSet,
+    now: SystemTime,
+    read: bool,
+    out: &mut Capture,
+) {
     let dir = root.join(relative);
     let entries: Vec<_> = match fs::read_dir(&dir) {
         Ok(entries) => entries.collect(),
@@ -228,27 +289,43 @@ fn walk(root: &Path, relative: &str, ignore: &globset::GlobSet, out: &mut Captur
             out.errors
                 .push(format!("{path}: symlinks are not supported"));
         } else if metadata.is_dir() {
-            walk(root, &path, ignore, out);
+            walk(root, &path, ignore, now, read, out);
         } else if metadata.is_file() {
-            match fs::read(entry.path()) {
-                Ok(bytes) => {
-                    #[cfg(unix)]
-                    let executable = {
-                        use std::os::unix::fs::PermissionsExt;
-                        metadata.permissions().mode() & 0o111 != 0
-                    };
-                    #[cfg(not(unix))]
-                    let executable = false;
-                    out.files.insert(
-                        path,
-                        File {
-                            bytes: bytes.into(),
-                            executable,
-                        },
-                    );
+            let (mut stat, recent) = stat(&metadata, now);
+            if read || recent {
+                match fs::read(entry.path()) {
+                    Ok(bytes) => {
+                        if recent {
+                            stat.push(b'C');
+                            stat.extend(Sha256::digest(&bytes));
+                        }
+                        if read {
+                            #[cfg(unix)]
+                            let executable = {
+                                use std::os::unix::fs::PermissionsExt;
+                                metadata.permissions().mode() & 0o111 != 0
+                            };
+                            #[cfg(not(unix))]
+                            let executable = false;
+                            out.files.insert(
+                                path.clone(),
+                                File {
+                                    bytes: bytes.into(),
+                                    executable,
+                                },
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        if recent {
+                            stat.push(b'E');
+                            stat.extend(e.to_string().into_bytes());
+                        }
+                        out.unread.push(format!("{path}: {e}"));
+                    }
                 }
-                Err(e) => out.errors.push(format!("{path}: {e}")),
             }
+            out.stats.insert(path, stat);
         } else {
             out.errors
                 .push(format!("{path}: only regular files are supported"));
@@ -393,4 +470,32 @@ fn parse_page(
         skill,
         bundle,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[cfg(unix)]
+    #[test]
+    fn stamp_reads_only_recently_modified_files() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().unwrap();
+        let file = root.path().join("index.md");
+        fs::write(&file, "---\ntitle: Home\n---\nHome").unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o000)).unwrap();
+        if fs::read(&file).is_ok() {
+            // Permissions do not stop this user (for example root), so the probe proves nothing.
+            return;
+        }
+        let settled = SystemTime::now() + Duration::from_secs(3600);
+        assert!(scan(root.path(), settled, false).errors.is_empty());
+        assert!(
+            !scan(root.path(), SystemTime::now(), false)
+                .errors
+                .is_empty()
+        );
+        assert!(!capture_at(root.path(), settled).errors.is_empty());
+    }
 }
