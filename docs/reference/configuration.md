@@ -27,7 +27,7 @@ llms:
 | --- | --- | --- | --- |
 | `title` | String | Name of the root directory | Site title in the HTML header, metadata, and `/llms.txt`. An empty or whitespace-only title is an error. |
 | `subtitle` | String | Empty string | Text beside the site title in the HTML header. |
-| `footer` | Optional string | `Powered by Auxesia` | Markdown rendered in the footer. An empty or whitespace-only string hides the footer. |
+| `footer` | Optional string | Attribution shown below | Markdown rendered in the footer. An empty or whitespace-only string hides the footer. |
 | `stylesheet` | Optional string | None | Path to a custom stylesheet, relative to the root. |
 | `ignore` | List of strings | Empty list | Glob patterns that exclude paths from the site. |
 | `llms` | Object | Object with an empty `header` | Configuration for `/llms.txt`. |
@@ -38,6 +38,12 @@ Invalid YAML, invalid field types, and invalid glob patterns are errors.
 An absent configuration file uses all defaults.
 
 ## Footer
+
+The default footer uses this Markdown:
+
+```markdown
+Powered by [Auxesia](https://github.com/tigrisdata/auxesia), with ❤️ from the nerds at [Tigris](https://www.tigrisdata.com)
+```
 
 The `footer` field accepts Markdown, including links, emphasis, and trusted HTML.
 Use root-relative links so they work on nested pages and skill pages.

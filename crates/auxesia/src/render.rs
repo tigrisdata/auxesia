@@ -424,7 +424,7 @@ fn shell(
         .config
         .footer
         .as_deref()
-        .unwrap_or("Powered by Auxesia");
+        .unwrap_or("Powered by [Auxesia](https://github.com/tigrisdata/auxesia), with ❤️ from the nerds at [Tigris](https://www.tigrisdata.com)");
     if !footer.trim().is_empty() {
         html.push_str("<footer id=\"footer\">");
         html.push_str(&markdown(footer));

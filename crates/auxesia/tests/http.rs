@@ -43,7 +43,7 @@ async fn footer_supports_markdown_defaults_and_removal() {
     put(&root, "index.md", source);
     let app = App::open(root.path(), true).unwrap();
     let html = String::from_utf8(request(&app, "/", None, "GET").await.2).unwrap();
-    assert!(html.contains("Powered by Auxesia"));
+    assert!(html.contains("Powered by <a href=\"https://github.com/tigrisdata/auxesia\">Auxesia</a>, with ❤️ from the nerds at <a href=\"https://www.tigrisdata.com\">Tigris</a>"));
     put(
         &root,
         ".auxesia.yaml",
@@ -60,7 +60,7 @@ async fn footer_supports_markdown_defaults_and_removal() {
             .unwrap();
         assert!(footer.contains("<strong>Our docs</strong>"));
         assert!(footer.contains("<a href=\"/contact.md\">Contact</a>"));
-        assert!(!footer.contains("Powered by Auxesia"));
+        assert!(!footer.contains("Powered by"));
     }
     assert_eq!(
         request(&app, "/index.md", Some("text/markdown"), "GET")
