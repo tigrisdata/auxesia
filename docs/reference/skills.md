@@ -58,6 +58,9 @@ A standalone `docs/skills/inspect-docs.md` uses `/skills/inspect-docs.md` and `/
 The folder aliases apply only to bundles.
 Do not create both forms with the same slug. Their canonical routes conflict.
 
+The files `skills/index.md` and `skills/README.md` are not skills.
+They supply the page for `/skills/`, as in other folders, and need a `title` string.
+
 Bundle HTML includes `<base href="/skills/serve-auxesia/">`.
 A relative link such as `references/checks.md` therefore reaches the supporting file.
 Markdown responses keep the original source, frontmatter, and relative links.

@@ -268,7 +268,11 @@ pub fn from_capture(captured: Capture) -> Result<Site, Failure> {
         }
         let skill = if let Some(bundle) = bundle {
             Some(bundle["skills/".len()..].to_owned())
-        } else if path.starts_with("skills/") && path.matches('/').count() == 1 {
+        } else if path.starts_with("skills/")
+            && path.matches('/').count() == 1
+            // These names supply the directory page for /skills/, as in any other folder.
+            && !matches!(path.as_str(), "skills/index.md" | "skills/README.md")
+        {
             Some(path["skills/".len()..path.len() - 3].to_owned())
         } else {
             None

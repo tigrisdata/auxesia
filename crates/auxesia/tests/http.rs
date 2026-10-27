@@ -549,3 +549,28 @@ async fn generated_links_encode_markdown_delimiters_and_unicode() {
         );
     }
 }
+
+#[tokio::test]
+async fn skills_directory_page_is_not_a_skill() {
+    for name in ["index.md", "README.md"] {
+        let root = TempDir::new().unwrap();
+        put(
+            &root,
+            &format!("skills/{name}"),
+            "---\ntitle: Skill catalog\n---\nCatalog body",
+        );
+        put(&root, "skills/task.md", "---\nname: Task\n---\nTask");
+        let app = App::open(root.path(), false).unwrap();
+        let html = String::from_utf8(request(&app, "/skills/", None, "GET").await.2).unwrap();
+        assert!(html.contains("Catalog body"), "{name}");
+        let skill = format!("/skills/{}.skill", name.trim_end_matches(".md"));
+        assert_eq!(
+            request(&app, &skill, None, "GET").await.0,
+            StatusCode::NOT_FOUND
+        );
+        let llms = String::from_utf8(request(&app, "/llms.txt", None, "GET").await.2).unwrap();
+        let skills = llms.split("## Skills").nth(1).unwrap();
+        assert!(!skills.contains(name), "{name} listed as a skill: {llms}");
+        assert!(skills.contains("/skills/task.skill"));
+    }
+}
