@@ -157,16 +157,21 @@ pub fn capture(root: &Path) -> Capture {
 
 fn walk(root: &Path, relative: &str, ignore: &globset::GlobSet, out: &mut Capture) {
     let dir = root.join(relative);
-    let entries = match fs::read_dir(&dir) {
-        Ok(entries) => entries,
+    let entries: Vec<_> = match fs::read_dir(&dir) {
+        Ok(entries) => entries.collect(),
         Err(e) => {
             out.errors.push(format!("{relative}: {e}"));
             return;
         }
     };
     // An ignored bundle entrypoint excludes the whole bundle, before Markdown classification.
+    // Match the listed name exactly: a stat of SKILL.md also finds skill.md on case-insensitive filesystems.
     let entrypoint = if relative.starts_with("skills/") && relative.matches('/').count() == 1 {
-        fs::symlink_metadata(dir.join("SKILL.md")).ok()
+        entries
+            .iter()
+            .flatten()
+            .find(|entry| entry.file_name() == "SKILL.md")
+            .and_then(|entry| fs::symlink_metadata(entry.path()).ok())
     } else {
         None
     };

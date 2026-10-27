@@ -29,6 +29,8 @@ Its archive contains only `inspect-docs/SKILL.md`, with the original source byte
 
 The folder form includes supporting files, such as reference text, scripts, and images.
 Only the entrypoint becomes a rendered page.
+The entrypoint name is case-sensitive on all operating systems.
+A folder with `skill.md` but no `SKILL.md` is not a bundle. Its Markdown files are ordinary pages that need a `title` string.
 Supporting Markdown files do not need frontmatter because Auxesia serves them as raw files.
 
 The `name` field supplies the display name. The filename or folder name supplies the URL slug and archive folder name.
