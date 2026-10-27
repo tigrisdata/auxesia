@@ -27,7 +27,7 @@ pub struct App {
     root: PathBuf,
     dev: bool,
     state: RwLock<Arc<ServingState>>,
-    flight: Mutex<Option<watch::Receiver<bool>>>,
+    flight: Mutex<Option<watch::Receiver<Phase>>>,
 }
 
 impl App {
@@ -53,48 +53,92 @@ impl App {
     }
 
     async fn refresh(self: &Arc<Self>) -> Arc<ServingState> {
-        let mut completion = {
-            let mut flight = self.flight.lock().unwrap();
-            if let Some(receiver) = flight.as_ref().filter(|receiver| !*receiver.borrow()) {
-                receiver.clone()
-            } else {
-                let (sender, receiver) = watch::channel(false);
-                *flight = Some(receiver.clone());
-                let app = self.clone();
-                // The task owns completion even if the initiating HTTP request is cancelled.
-                tokio::spawn(async move {
-                    let previous = app.state.read().unwrap().clone();
-                    let root = app.root.clone();
-                    let prior = previous.clone();
-                    let result =
-                        tokio::task::spawn_blocking(move || snapshot::load(&root, Some(&prior)))
-                            .await;
-                    let next = match result {
-                        Ok(Ok(next)) => next,
-                        other => {
-                            let mut next = (*previous).clone();
-                            next.errors = vec![format!("Cannot refresh documentation: {other:?}")];
-                            next
-                        }
-                    };
-                    for warning in &next.warnings {
-                        if !previous.warnings.contains(warning) {
-                            eprintln!("warning: {warning}");
-                        }
-                    }
-                    for error in &next.errors {
-                        if !previous.errors.contains(error) {
-                            eprintln!("error: {error}");
-                        }
-                    }
-                    *app.state.write().unwrap() = Arc::new(next);
-                    let _ = sender.send(true);
-                });
-                receiver
+        // An abandoned refresh published nothing, so the request starts another one.
+        for _ in 0..3 {
+            let mut completion = self.join_or_start();
+            if let Ok(phase) = completion
+                .wait_for(|phase| matches!(phase, Phase::Published | Phase::Abandoned))
+                .await
+                && *phase == Phase::Published
+            {
+                break;
             }
-        };
-        let _ = completion.wait_for(|done| *done).await;
+        }
         self.state.read().unwrap().clone()
+    }
+
+    fn join_or_start(self: &Arc<Self>) -> watch::Receiver<Phase> {
+        let mut flight = self.flight.lock().unwrap();
+        // A queued refresh has not scanned yet, so it sees every edit made before this request.
+        // A scanning refresh may have read older files, so a new refresh runs after it.
+        let predecessor = match flight.as_ref() {
+            Some(receiver) if receiver.has_changed().is_err() => None,
+            Some(receiver) if *receiver.borrow() == Phase::Queued => return receiver.clone(),
+            Some(receiver) if *receiver.borrow() == Phase::Scanning => Some(receiver.clone()),
+            _ => None,
+        };
+        let (sender, receiver) = watch::channel(Phase::Queued);
+        *flight = Some(receiver.clone());
+        let signal = Signal(sender);
+        let app = self.clone();
+        // The task owns completion even if the initiating HTTP request is cancelled.
+        tokio::spawn(async move {
+            if let Some(mut predecessor) = predecessor {
+                let _ = predecessor
+                    .wait_for(|phase| matches!(phase, Phase::Published | Phase::Abandoned))
+                    .await;
+            }
+            signal.0.send_replace(Phase::Scanning);
+            let previous = app.state.read().unwrap().clone();
+            let root = app.root.clone();
+            let prior = previous.clone();
+            let result =
+                tokio::task::spawn_blocking(move || snapshot::load(&root, Some(&prior))).await;
+            let next = match result {
+                Ok(Ok(next)) => next,
+                other => {
+                    let mut next = (*previous).clone();
+                    next.errors = vec![format!("Cannot refresh documentation: {other:?}")];
+                    next
+                }
+            };
+            for warning in &next.warnings {
+                if !previous.warnings.contains(warning) {
+                    eprintln!("warning: {warning}");
+                }
+            }
+            for error in &next.errors {
+                if !previous.errors.contains(error) {
+                    eprintln!("error: {error}");
+                }
+            }
+            *app.state.write().unwrap() = Arc::new(next);
+            signal.0.send_replace(Phase::Published);
+        });
+        receiver
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Phase {
+    Queued,
+    Scanning,
+    Published,
+    Abandoned,
+}
+
+// Waiters must always learn the outcome, even if the worker panics or is dropped before it runs.
+struct Signal(watch::Sender<Phase>);
+
+impl Drop for Signal {
+    fn drop(&mut self) {
+        self.0.send_if_modified(|phase| {
+            let abandoned = *phase != Phase::Published;
+            if abandoned {
+                *phase = Phase::Abandoned;
+            }
+            abandoned
+        });
     }
 }
 
@@ -429,5 +473,61 @@ mod tests {
             let chunk = body.frame().await.unwrap().unwrap().into_data().unwrap();
             assert_eq!(chunk.as_ptr(), expected, "{path} {accept}");
         }
+    }
+
+    fn page_html(state: &ServingState) -> &str {
+        let Route::Page { html, .. } = &state.snapshot.routes["/"] else {
+            panic!("page");
+        };
+        html
+    }
+
+    #[test]
+    fn refresh_recovers_after_a_worker_dies_without_signalling() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("index.md");
+        std::fs::write(&path, "---\ntitle: Original\n---\nOriginal").unwrap();
+        let app = App::open(root.path(), true).unwrap();
+        // Shutting down this runtime drops the spawned worker before it runs.
+        let doomed = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        doomed.block_on(async {
+            let mut refresh = Box::pin(app.refresh());
+            let mut context = Context::from_waker(Waker::noop());
+            assert!(matches!(refresh.as_mut().poll(&mut context), Poll::Pending));
+        });
+        drop(doomed);
+        std::fs::write(
+            &path,
+            "---\ntitle: Changed\n---\nChanged after the dead worker",
+        )
+        .unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let state = runtime.block_on(app.refresh());
+        assert!(page_html(&state).contains("Changed after the dead worker"));
+    }
+
+    #[tokio::test]
+    async fn request_does_not_accept_a_scan_that_started_before_it() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("index.md");
+        std::fs::write(&path, "---\ntitle: Original\n---\nOriginal").unwrap();
+        let app = App::open(root.path(), true).unwrap();
+        let mut first = Box::pin(app.refresh());
+        let mut context = Context::from_waker(Waker::noop());
+        assert!(matches!(first.as_mut().poll(&mut context), Poll::Pending));
+        // Let the worker start its scan, then give the blocking scan time to read the tree.
+        for _ in 0..4 {
+            tokio::task::yield_now().await;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        std::fs::write(&path, "---\ntitle: Changed\n---\nSaved during the scan").unwrap();
+        let state = app.refresh().await;
+        assert!(page_html(&state).contains("Saved during the scan"));
+        first.await;
     }
 }
