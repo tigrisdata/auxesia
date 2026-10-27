@@ -574,3 +574,26 @@ async fn skills_directory_page_is_not_a_skill() {
         assert!(skills.contains("/skills/task.skill"));
     }
 }
+
+#[tokio::test]
+async fn folders_without_published_files_have_no_directory_route() {
+    let root = TempDir::new().unwrap();
+    put(&root, ".auxesia.yaml", "ignore: ['plans/**', '**/*.tmp']\n");
+    put(&root, "plans/draft.md", "No title");
+    put(&root, "plans/deep/draft.md", "No title");
+    put(&root, "scratch/notes.tmp", "temporary");
+    fs::create_dir(root.path().join("empty")).unwrap();
+    put(&root, "images/logo.svg", "<svg/>");
+    let app = App::open(root.path(), false).unwrap();
+    for path in ["/plans/", "/plans", "/plans/deep/", "/scratch/", "/empty/"] {
+        assert_eq!(
+            request(&app, path, None, "GET").await.0,
+            StatusCode::NOT_FOUND,
+            "{path}"
+        );
+    }
+    assert_eq!(
+        request(&app, "/images/", None, "GET").await.0,
+        StatusCode::OK
+    );
+}

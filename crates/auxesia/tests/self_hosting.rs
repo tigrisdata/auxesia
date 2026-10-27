@@ -17,6 +17,7 @@ async fn serves_its_own_documentation_without_diagnostics() {
     assert!(site.pages.contains_key("/getting-started.md"));
     assert!(site.pages.contains_key("/skills/serve-auxesia.md"));
     assert!(!snapshot.routes.contains_key("/plans/auxesia-v1.md"));
+    assert!(!snapshot.routes.contains_key("/plans/"));
     for page in site.pages.values() {
         let arena = comrak::Arena::new();
         let document = comrak::parse_document(&arena, &page.body, &comrak::Options::default());

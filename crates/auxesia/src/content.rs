@@ -126,6 +126,14 @@ pub fn capture(root: &Path) -> Capture {
         }
     };
     walk(root, "", &ignore, &mut out);
+    // A folder whose files are all ignored, hidden, or absent publishes no directory route.
+    let occupied: BTreeSet<&str> = out
+        .files
+        .keys()
+        .flat_map(|path| path.match_indices('/').map(|(i, _)| &path[..i]))
+        .collect();
+    out.dirs
+        .retain(|dir| dir.is_empty() || occupied.contains(dir.as_str()));
     for dir in &out.dirs {
         hash.update(b"D");
         hash.update(dir.as_bytes());

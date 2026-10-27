@@ -84,6 +84,10 @@ For example, `drafts` excludes the root directory `drafts` and all files inside 
 The pattern `**/*.tmp` excludes `.tmp` files throughout the tree.
 Patterns do not use `.gitignore` negation rules.
 
+A folder gets a directory route only when it contains at least one published file.
+For example, `plans/**` excludes all files in `plans`, so `/plans/` returns `404 Not Found`.
+Empty folders and folders that contain only hidden files also have no directory route.
+
 Dot-prefixed files and directories are always excluded, apart from the separately read `.auxesia.yaml` file.
 If a pattern excludes `skills/example/SKILL.md`, Auxesia excludes the entire `example` bundle.
 
