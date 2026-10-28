@@ -81,9 +81,12 @@ favicon: static/logo.png
 ```
 
 The path has the same restrictions as `stylesheet`.
-Supported source formats are PNG, JPEG, WebP, ICO, and BMP.
-SVG files can be served from `static/`, but favicon generation requires a raster image.
-Source images must fit within 4096 × 4096 pixels and the 64 MiB decoder allocation limit.
+Supported source formats are PNG, JPEG, WebP, ICO, BMP, and SVG.
+Auxesia renders SVG sources at each generated icon size.
+Embedded PNG, JPEG, and WebP images have the same decoding limits as raster source images.
+SVG image references to external files or URLs are ignored. Embed images in the SVG with data URLs.
+SVG text uses fonts available on the server. Convert text to paths for consistent results across servers.
+Raster source images must fit within 4096 × 4096 pixels and the 64 MiB decoder allocation limit.
 
 Auxesia generates these URLs and adds icon links to every HTML page:
 
