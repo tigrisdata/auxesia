@@ -3,6 +3,7 @@ navbar: Get started
 title: Get started
 description: Run the Auxesia documentation, install the server, and serve your own pages.
 ---
+
 # Get started
 
 Auxesia serves this documentation from the repository's `docs` folder. You can run the same site locally with Cargo.
@@ -70,6 +71,7 @@ auxesia ./docs --dev
    title: My documentation
    description: Instructions and reference for my project.
    ---
+
    # My documentation
 
    Welcome to the project documentation.

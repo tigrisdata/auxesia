@@ -3,93 +3,73 @@ navbar: Write pages
 title: Write pages
 description: Write Markdown pages with frontmatter, links, directory pages, and local assets.
 ---
+
 # Write pages
 
-Auxesia reads Markdown files from a local documentation folder. Each ordinary Markdown page requires YAML frontmatter with a non-empty `title` string.
-
-## Create a page
-
-Create a file such as `guide.md` in the documentation folder:
+Auxesia reads markdown files and converts them to HTML. To create a page, create a file such as `docs/contribution-guide.md`:
 
 ```markdown
 ---
-title: Project guide
-navbar: Guide
-description: Learn how to use the project.
+title: Contribution Guide
+navbar: Contribution Guide
+description: Information on how to contribute to the Auxesia project.
 ---
-# Project guide
 
-This page explains the project.
+# Contribution Guide
 ```
 
-The file is available at `/guide.md`. The `title` supplies HTML metadata and discovery entries. The Markdown body supplies the visible page content.
+When Auxesia compiles that page, it will be served at `/contribution-guide`.
 
-The `description` supplies HTML metadata and the summary in `/llms.txt`. A missing or blank description causes a warning. It does not prevent the server from publishing the page.
+Then write your documentation as markdown like normal. Auxesia supports [GitHub Flavored Markdown](https://github.github.com/gfm/) including tables, task lists, strikethrough text, automatic links, and heading IDs.
 
-Skill pages use `name` instead of `title`. The [skills reference](/reference/skills.md) describes their frontmatter and folder structure.
+## Linking pages
 
-## Add links and assets
-
-Use Markdown links to connect pages:
+Use normal markdown links to connect pages:
 
 ```markdown
-[Project guide](/guide.md)
-[HTTP reference](/reference/http.md)
+[Project guide](guide.md)
+[HTTP reference](reference/http.md)
 ```
 
-Root-relative links keep the same target in HTML and Markdown responses. Relative links also work, but their targets depend on the current URL.
+Of note: root-relative links (ones that start with `/`, such as `/contribution-guide.md`) are relative to your documentation folder root. Prefer using relative links when possible.
 
-Place assets inside the documentation folder. Then use their paths in the Markdown body:
+## Static assets
 
-```markdown
-![System diagram](/images/system.png)
-[Example data](/examples/data.json)
-```
-
-Auxesia serves eligible non-Markdown files as static assets. Hidden files and ignored paths are absent from the site. Symlinks cause an error.
-
-Put files in the root `static/` folder to serve them without page processing:
+Place assets inside the `static` folder in your documentation root. Then use their paths in the Markdown body:
 
 ```markdown
+![System diagram](/static/images/system.png)
+[Example data](/static/examples/data.json)
+
 ![Logo](/static/logo.svg)
 [Example Markdown](/static/example.md)
 ```
 
 For example, `docs/static/logo.svg` is available at `/static/logo.svg` when the documentation root is `docs`.
-Markdown files in this folder need no frontmatter and return their original bytes.
-The folder has no directory pages or discovery entries. Hidden files, ignore patterns, and symlink restrictions still apply.
-See [Favicon configuration](/reference/configuration.md#favicon) to generate browser icons from an image.
 
-## Create directory pages
+This folder does not allow the use of symbolic links. If your architecture requires the use of symbolic links for this, consider a different architecture.
 
-A directory can contain `index.md` or `README.md`. Auxesia uses `index.md` first, then `README.md`, as the page for the directory URL.
+## Index pages
 
-For example, `reference/index.md` supplies the page at `/reference/`. The file also remains available at `/reference/index.md`.
+If a directory contains an `index.md` or `README.md` file, this file is used as the index page. The front matter in such an index page is used in the navbar and across the website. When possible, prefer using `README.md` so that your documentation renders cleanly in git forge UIs.
 
-Without either file, Auxesia generates a directory page from the indexed pages. The root directory uses the same rules.
+For example:
 
-The sidebar shows a folder tree for the complete documentation site.
-Select a folder row to expand or collapse its contents.
-Select **Overview** inside a folder to open its directory page.
-Select **Home** to return to the root directory.
+```markdown
+---
+title: Agent Skills
+navbar: Skills
+description: Auxesia agent skills
+---
 
-Page labels use the page title. Skill labels use the skill name.
-The optional `navbar` field replaces this label.
-Missing, null, empty, or whitespace-only values use the default label.
+...
+```
 
-Folder labels use the title or `navbar` value from a discoverable directory page.
-Without a discoverable directory page, the label uses the folder name with spaces instead of hyphens and underscores.
-Folders appear before pages. Each group sorts alphabetically by display label, ignoring case.
-The page that supplies a directory appears as **Overview**, without a duplicate file link.
+If no index page is defined for a folder, Auxesia will automatically generate a minimal index for you.
 
-The sidebar highlights the current page and expands its parent folders.
-Other folders start collapsed when a page loads.
-On phones, the **Menu** button opens and closes the sidebar.
-Long navigation lists scroll within the sidebar.
+## Non-indexed pages
 
-## Control discovery
-
-To omit a page from navigation and `/llms.txt`, add `index: false`:
+To omit a page from the navbar and `/llms.txt`, add `index: false` to its front matter:
 
 ```yaml
 ---
@@ -99,15 +79,16 @@ index: false
 ---
 ```
 
-The page remains available at its URL. `index: false` does not restrict access. An explicit link can still point to the page.
+## Front matter reference
 
-To exclude files from the site, use `ignore` in `.auxesia.yaml`. The [configuration reference](/reference/configuration.md) describes ignore patterns.
+Auxesia supports the following fields in YAML front matter:
 
-## Use Markdown features
-
-Auxesia supports tables, task lists, strikethrough text, automatic links, and heading IDs. It also permits raw HTML in Markdown bodies.
-
-The server publishes the original source for Markdown requests. HTML responses omit the YAML frontmatter from the visible page body.
+| Field         | Type           | Default                     | Purpose                                                                                                                               |
+| :------------ | :------------- | :-------------------------- | :------------------------------------------------------------------------------------------------------------------------------------ |
+| `title`       | String         | Required                    | The page title in HTML and discovery entries. It must contain non-whitespace text.                                                    |
+| `navbar`      | String or null | The filename or folder name | Overrides the navbar label with this text.                                                                                            |
+| `description` | String or null | None                        | If set, supplies Open Graph description metadata and `/llms.txt` details for agents to pattern match against the intent of your page. |
+| `index`       | Boolean        | `true`                      | If true, include the page in directory navigation and `/llms.txt`. If you want to hide a page from discovery, set this to `false`.    |
 
 ## Apply edits
 

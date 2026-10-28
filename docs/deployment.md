@@ -3,6 +3,7 @@ navbar: Deploy with Docker
 title: Deploy with Docker
 description: Build the Docker image, serve a documentation folder, and publish images to GHCR.
 ---
+
 # Deploy with Docker
 
 The Docker image includes Auxesia and its documentation at `/docs`. The server listens on `0.0.0.0:8080` inside the container.
@@ -65,31 +66,6 @@ To stop the service, run:
 ```sh
 docker compose down
 ```
-
-## Publish to GHCR
-
-The repository workflow configures publication to `ghcr.io/tigrisdata/auxesia`. Publication occurs after a push to `main` or a `v*` tag in `tigrisdata/auxesia`.
-
-The workflow first requires Rust format checks, Clippy, tests, and a Docker smoke test to pass. Pull requests run these checks without publication.
-
-The workflow publishes images for `linux/amd64` and `linux/arm64` with these tags:
-
-| Push | Image tags |
-| --- | --- |
-| `main` | `main`, `latest`, and `sha-<full-commit-SHA>` |
-| `v1.2.3` | `v1.2.3`, `1.2.3`, and `sha-<full-commit-SHA>` |
-| `v1.2.3-rc.1` | `v1.2.3-rc.1`, `1.2.3-rc.1`, and `sha-<full-commit-SHA>` |
-
-Only a `main` push updates `latest`. Version tags, including prerelease tags, do not update `latest`.
-
-After the workflow publishes an image, run it:
-
-```sh
-docker run --rm -p 127.0.0.1:8080:8080 \
-  ghcr.io/tigrisdata/auxesia:latest
-```
-
-The workflow uses `GITHUB_TOKEN` with package write permission to publish the image.
 
 ## Public access
 
