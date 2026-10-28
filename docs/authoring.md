@@ -68,20 +68,24 @@ For example, `reference/index.md` supplies the page at `/reference/`. The file a
 
 Without either file, Auxesia generates a directory page from the indexed pages. The root directory uses the same rules.
 
-Navbar links use exact filenames, including the `.md` suffix.
+The sidebar shows a folder tree for the complete documentation site.
+Select a folder row to expand or collapse its contents.
+Select **Overview** inside a folder to open its directory page.
+Select **Home** to return to the root directory.
+
+Page labels use the page title. Skill labels use the skill name.
 The optional `navbar` field replaces this label.
-For example, `navbar: Guide` shows “Guide” instead of “guide.md”.
-Missing, null, empty, or whitespace-only values use the filename.
+Missing, null, empty, or whitespace-only values use the default label.
 
-Folder links use the folder name.
-A discoverable `index.md` can override this label with `navbar`.
-If no index exists, Auxesia uses the `navbar` value from a discoverable `README.md`.
+Folder labels use the title or `navbar` value from a discoverable directory page.
+Without a discoverable directory page, the label uses the folder name with spaces instead of hyphens and underscores.
+Folders appear before pages. Each group sorts alphabetically by display label, ignoring case.
+The page that supplies a directory appears as **Overview**, without a duplicate file link.
 
-Skill links use the source filename, such as `SKILL.md`, unless the skill frontmatter supplies `navbar`.
-
-The header keeps `.` and `..` first, then lists folders before pages.
-Each group sorts alphabetically by display label, ignoring case. Folder links include an outline icon.
-The current directory's `index.md` appears only as `.` in the header.
+The sidebar highlights the current page and expands its parent folders.
+Other folders start collapsed when a page loads.
+On phones, the **Menu** button opens and closes the sidebar.
+Long navigation lists scroll within the sidebar.
 
 ## Control discovery
 

@@ -150,7 +150,7 @@ index: true
 | --- | --- | --- | --- |
 | `title` | String | Required for documentation | Title in the HTML page and discovery entries. |
 | `name` | String | Required for skill entrypoints | Skill title in the HTML page and discovery entries. |
-| `navbar` | Optional string | Filename or folder name | Navbar label override. Missing, null, empty, or whitespace-only values use the default. |
+| `navbar` | Optional string | Page title, skill name, or folder label | Sidebar label override. Missing, null, empty, or whitespace-only values use the default. |
 | `description` | Optional string | None | HTML description metadata and text in `/llms.txt`. |
 | `index` | Boolean | `true` | Include the page in directory navigation and `/llms.txt`. |
 

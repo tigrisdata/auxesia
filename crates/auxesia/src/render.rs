@@ -476,6 +476,64 @@ fn entries(site: &Site, dir: &str) -> BTreeMap<String, String> {
     entries
 }
 
+fn navigation(site: &Site, dir: &str, current: &str) -> Markup {
+    let directory = directory_page(site, dir);
+    let mut children: Vec<_> = entries(site, dir)
+        .into_iter()
+        .filter(|(link, _)| directory.is_none_or(|(path, _)| path != link))
+        .map(|(link, title)| {
+            let page = if link.ends_with('/') {
+                directory_page(site, &link)
+                    .map(|(_, page)| page)
+                    .filter(|page| page.index)
+            } else {
+                site.pages.get(&link)
+            };
+            let label = page.and_then(|page| page.navbar.clone()).unwrap_or(title);
+            (link, label)
+        })
+        .collect();
+    children.sort_by_cached_key(|(link, label)| {
+        (
+            !link.ends_with('/'),
+            label.to_lowercase(),
+            label.clone(),
+            link.clone(),
+        )
+    });
+    let directory_current = current == dir || directory.is_some_and(|(path, _)| path == current);
+    html! {
+        ul {
+            @if directory.is_none_or(|(_, page)| page.index) {
+                li {
+                    a href=(url(dir)) aria-current=[directory_current.then_some("page")] {
+                        @if dir == "/" { "Home" } @else { "Overview" }
+                    }
+                }
+            }
+            @for (link, label) in children {
+                li {
+                    @if link.ends_with('/') {
+                        details open[current.starts_with(&link)] {
+                            summary {
+                                svg class="folder-icon" aria-hidden="true" focusable="false"
+                                    viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="1.8" stroke-linejoin="round" {
+                                    path d="M3 7V4h6l3 3h9v13H3Z" {}
+                                }
+                                (label)
+                            }
+                            (navigation(site, &link, current))
+                        }
+                    } @else {
+                        a href=(url(&link)) aria-current=[(current == link).then_some("page")] { (label) }
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn shell(site: &Site, path: &str, title: &str, description: Option<&str>, body: &Markup) -> String {
     let site_title = site.config.title.as_deref().unwrap_or("Documentation");
     let browser_title = if title == site_title {
@@ -483,44 +541,6 @@ fn shell(site: &Site, path: &str, title: &str, description: Option<&str>, body: 
     } else {
         format!("{title} — {site_title}")
     };
-    let dir = if path.ends_with('/') {
-        path
-    } else {
-        &path[..path.rfind('/').unwrap() + 1]
-    };
-    let directory = directory_page(site, dir).map(|(link, _)| link);
-    let mut navigation: Vec<_> = entries(site, dir)
-        .into_iter()
-        .filter(|(link, _)| Some(link) != directory)
-        .map(|(link, _)| {
-            let label = if link.ends_with('/') {
-                directory_page(site, &link)
-                    .filter(|(_, page)| page.index)
-                    .and_then(|(_, page)| page.navbar.clone())
-                    .unwrap_or_else(|| {
-                        link.trim_end_matches('/')
-                            .rsplit('/')
-                            .next()
-                            .unwrap()
-                            .to_owned()
-                    })
-            } else {
-                let page = &site.pages[&link];
-                page.navbar
-                    .clone()
-                    .unwrap_or_else(|| page.source_path.rsplit('/').next().unwrap().to_owned())
-            };
-            (link, label)
-        })
-        .collect();
-    navigation.sort_by_cached_key(|(link, title)| {
-        (
-            !link.ends_with('/'),
-            title.to_lowercase(),
-            title.clone(),
-            link.clone(),
-        )
-    });
     let footer = site
         .config
         .footer
@@ -562,34 +582,21 @@ fn shell(site: &Site, path: &str, title: &str, description: Option<&str>, body: 
                         span class="headerSubtitle" { (&site.config.subtitle) }
                     }
                 }
-                nav id="side-bar" aria-label="Directory" {
-                    ul {
-                        li { a href=(url(dir)) { "." } }
-                        @if dir != "/" {
-                            @let trimmed = dir.trim_end_matches('/');
-                            @let parent = &trimmed[..trimmed.rfind('/').unwrap() + 1];
-                            li { a href=(url(parent)) { ".." } }
-                        }
-                        @for (link, label) in navigation {
-                            li {
-                                a href=(url(&link)) {
-                                    @if link.ends_with('/') {
-                                        svg class="folder-icon" aria-hidden="true" focusable="false"
-                                            viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                            stroke-width="1.8" stroke-linejoin="round" {
-                                            path d="M3 7V4h6l3 3h9v13H3Z" {}
-                                        }
-                                    }
-                                    (label)
-                                }
-                            }
-                        }
+                div class="page-layout" {
+                    button class="menu-toggle" type="button" aria-expanded="false" aria-controls="side-bar"
+                        onclick="this.setAttribute('aria-expanded', this.getAttribute('aria-expanded') !== 'true')" {
+                        span aria-hidden="true" { "☰" }
+                        " Menu"
                     }
-                }
-                main id="main" {
-                    (body)
-                    @if path == "/" {
-                        div style="display: none" { (GUIDANCE) }
+                    noscript { style { ".menu-toggle { display: none !important; } #side-bar { display: block !important; }" } }
+                    nav id="side-bar" aria-label="Documentation" {
+                        (navigation(site, "/", path))
+                    }
+                    main id="main" {
+                        (body)
+                        @if path == "/" {
+                            div style="display: none" { (GUIDANCE) }
+                        }
                     }
                 }
                 @if !footer.trim().is_empty() {
