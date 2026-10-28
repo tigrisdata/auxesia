@@ -227,18 +227,24 @@ async fn handle(
                     head,
                 ),
                 Some(false) => {
-                    let mut body = vec![shared(&Arc::<[u8]>::from(html.clone()))];
-                    if app.dev && !state.errors.is_empty() {
-                        let mut aside = String::from(
-                            "<aside class=\"auxesia-errors\" role=\"alert\"><strong>Update failed. Serving the last valid site.</strong><ul>",
-                        );
-                        for error in &state.errors {
-                            aside.push_str(&format!("<li>{}</li>", render::escape(error)));
-                        }
-                        aside.push_str("</ul><p>Fix these errors and reload.</p></aside>");
-                        body.push(Bytes::from(aside));
-                    }
-                    body.push(Bytes::from_static(b"</body></html>"));
+                    let mut page = shared(&Arc::<[u8]>::from(html.clone()));
+                    let body = if app.dev && !state.errors.is_empty() {
+                        let closing = page.split_off(page.len() - "</body></html>".len());
+                        let aside = maud::html! {
+                            aside class="auxesia-errors" role="alert" {
+                                strong { "Update failed. Serving the last valid site." }
+                                ul {
+                                    @for error in &state.errors {
+                                        li { (error) }
+                                    }
+                                }
+                                p { "Fix these errors and reload." }
+                            }
+                        };
+                        vec![page, Bytes::from(aside.into_string()), closing]
+                    } else {
+                        vec![page]
+                    };
                     response(StatusCode::OK, "text/html; charset=utf-8", body, head)
                 }
                 None => response(
