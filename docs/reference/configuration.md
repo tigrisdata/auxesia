@@ -93,10 +93,10 @@ Auxesia generates these URLs and adds icon links to every HTML page:
 
 | URL | Content |
 | --- | --- |
-| `/.auxesia/gen/favicon.ico` | ICO with 16 × 16, 32 × 32, and 48 × 48 images. |
-| `/.auxesia/gen/favicon-16x16.png` | 16 × 16 PNG. |
-| `/.auxesia/gen/favicon-32x32.png` | 32 × 32 PNG. |
-| `/.auxesia/gen/apple-touch-icon.png` | 180 × 180 PNG. |
+| `/_auxesia/gen/favicon.ico` | ICO with 16 × 16, 32 × 32, and 48 × 48 images. |
+| `/_auxesia/gen/favicon-16x16.png` | 16 × 16 PNG. |
+| `/_auxesia/gen/favicon-32x32.png` | 32 × 32 PNG. |
+| `/_auxesia/gen/apple-touch-icon.png` | 180 × 180 PNG. |
 
 Images retain their proportions, with transparent padding around images that are not square.
 Generated images stay in memory. Auxesia does not write files into the documentation root.
