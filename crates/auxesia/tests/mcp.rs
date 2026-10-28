@@ -129,16 +129,126 @@ impl Client {
 }
 
 #[tokio::test]
-async fn lists_three_read_only_tools() {
+async fn lists_read_only_tools() {
     let root = site();
     let app = App::open(root.path(), false).unwrap();
     let mut client = Client::connect(app.router()).await;
     let res = client.request("tools/list", json!({})).await;
     let tools = res["result"]["tools"].as_array().unwrap();
     let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
-    assert_eq!(names, ["list_skills", "get_skill", "read_skill_file"]);
+    assert_eq!(
+        names,
+        [
+            "list_skills",
+            "get_skill",
+            "read_skill_file",
+            "search_docs",
+            "read_doc"
+        ]
+    );
     for tool in tools {
         assert_eq!(tool["annotations"]["readOnlyHint"], true, "{tool}");
+    }
+}
+
+#[tokio::test]
+async fn documentation_search_matches_http_and_reads_original_markdown() {
+    let root = site();
+    let source = "---\ntitle: Hidden quasar\nindex: false\n---\n# Quasar\nAn exact phrase.";
+    put(&root, "guide/index.md", source);
+    let app = App::open(root.path(), false).unwrap();
+    let mut client = Client::connect(app.router()).await;
+    let (texts, error) = client
+        .call("search_docs", json!({"query": "quasar", "limit": 1}))
+        .await;
+    assert!(!error, "{texts:?}");
+    let results: Value = serde_json::from_str(&texts[0]).unwrap();
+    let res = app
+        .router()
+        .oneshot(
+            Request::get("/_auxesia/search.json?q=quasar&limit=1")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let http: Value =
+        serde_json::from_slice(&res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(results, http);
+    assert_eq!(results["results"][0]["url"], "/guide/");
+    for path in ["/guide/", "/guide/index.md", "/guide"] {
+        let (texts, error) = client.call("read_doc", json!({"path":path})).await;
+        assert!(!error, "{texts:?}");
+        let doc: Value = serde_json::from_str(&texts[0]).unwrap();
+        assert_eq!(doc["markdown"], source);
+        assert_eq!(doc["url"], "/guide/");
+        assert_eq!(doc["title"], "Hidden quasar");
+    }
+    let (texts, error) = client
+        .call("read_doc", json!({"path":"/skills/deploy/SKILL.md"}))
+        .await;
+    assert!(!error, "{texts:?}");
+    assert_eq!(
+        serde_json::from_str::<Value>(&texts[0]).unwrap()["markdown"],
+        DEPLOY
+    );
+}
+
+#[tokio::test]
+async fn documentation_tools_validate_queries_and_page_paths() {
+    let root = site();
+    put(
+        &root,
+        "caf%C3%A9.md",
+        "---\ntitle: Percent\n---\nLiteral percent",
+    );
+    put(
+        &root,
+        "café.md",
+        "---\ntitle: Unicode\n---\nUnicode content",
+    );
+    let app = App::open(root.path(), false).unwrap();
+    let mut client = Client::connect(app.router()).await;
+    for args in [
+        json!({}),
+        json!({"query": 1}),
+        json!({"query":"\"open"}),
+        json!({"query":"x", "limit": 0}),
+        json!({"query":"x", "limit": 51}),
+        json!({"query":"x", "offset": -1}),
+        json!({"query":"x".repeat(513)}),
+    ] {
+        assert!(client.call("search_docs", args.clone()).await.1, "{args}");
+    }
+    for path in [
+        "https://example.com/",
+        "//example.com/",
+        "guide/index.md",
+        "/../index.md",
+        "/%2e%2e/index.md",
+        "/%2Findex.md",
+        "/%FF",
+        "/%xy",
+        "/missing.md",
+        "/skills/deploy/references/checks.md",
+        "/_auxesia/style.css",
+        "/index.md?x=1",
+    ] {
+        assert!(
+            client.call("read_doc", json!({"path": path})).await.1,
+            "{path}"
+        );
+    }
+    for (path, title) in [
+        ("/caf%C3%A9.md", "Unicode"),
+        ("/caf%25C3%25A9.md", "Percent"),
+    ] {
+        let (texts, error) = client.call("read_doc", json!({"path":path})).await;
+        assert!(!error, "{texts:?}");
+        assert_eq!(
+            serde_json::from_str::<Value>(&texts[0]).unwrap()["title"],
+            title
+        );
     }
 }
 

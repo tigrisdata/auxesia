@@ -1,13 +1,13 @@
 ---
 navbar: MCP
 title: MCP reference
-description: Connect an MCP client to /mcp to list skills and read their files with tools.
+description: Connect an MCP client to search documentation, read pages, and use published skills.
 ---
 
 # MCP reference
 
 Auxesia serves a Model Context Protocol (MCP) endpoint at `/mcp`.
-An MCP client, such as Claude Code, can use this endpoint to find skills and read them.
+An MCP client, such as Claude Code, can use this endpoint to search documentation, read pages, and find skills.
 The endpoint is always on and read-only.
 Auxesia never runs a skill or a script from a skill bundle.
 
@@ -35,6 +35,8 @@ All tools have the `readOnlyHint` annotation.
 | `list_skills` | None | A JSON array with the slug, name, description, page URL, and archive URL of each skill. |
 | `get_skill` | `name` | The original `SKILL.md` text, then a JSON summary with the list of supporting files. |
 | `read_skill_file` | `name`, `path` | The text of one file from the skill bundle. |
+| `search_docs` | `query`, optional `limit` and `offset` | JSON with `results` and `total`. Results contain `title`, `url`, and `excerpt`. |
+| `read_doc` | `path` | JSON with `title`, canonical `url`, and original `markdown`, including frontmatter. |
 
 The `name` argument is the skill slug, such as `serve-auxesia`.
 The `path` argument is relative to the skill folder, such as `references/checks.md`.
@@ -42,6 +44,29 @@ The `get_skill` result gives the exact `path` values.
 
 `list_skills` does not show skills with `index: false`, the same as `/llms.txt`.
 `get_skill` and `read_skill_file` accept these hidden skills by slug, the same as their direct URLs.
+
+## Search and read documentation
+
+Call `search_docs` with words or double-quoted phrases. Then pass a result URL to `read_doc`.
+Search includes all published pages, including pages hidden from navigation with `index: false`.
+It excludes ignored files, static files, and skill supporting files.
+Use `read_skill_file` for supporting files.
+
+All words and phrases must match. Searches ignore letter case and do not use stemming.
+Title and heading matches receive more weight than body matches.
+The website and MCP use the same index and ranking.
+
+Queries can contain up to 512 Unicode characters.
+The default `limit` is 10, with a permitted range from 1 to 50.
+The default `offset` is 0. It must be a nonnegative integer.
+An empty query returns no results.
+Unclosed quotes and invalid pagination produce a tool error.
+
+The `read_doc` path is a site-relative URL, such as `/getting-started.md`.
+Known page aliases resolve to the canonical page URL.
+URL-encode special characters in paths, as search results do.
+External URLs, query strings, fragments, and non-page resources produce a tool error.
+The tool returns generated Markdown for directory listings.
 
 ## Errors
 

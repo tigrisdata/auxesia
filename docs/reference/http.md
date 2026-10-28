@@ -123,6 +123,44 @@ The `/mcp` and `/mcp/sse` routes are also reserved for the [MCP endpoint](/refer
 Root HTML contains hidden agent guidance about `/llms.txt`, Markdown requests, skills, downloads, and the MCP endpoint.
 The guidance does not appear in the original Markdown response.
 
+## Search
+
+Search runs on the Auxesia server with an in-memory Tantivy index.
+It needs no external search service or browser search engine.
+The search form on each page works without JavaScript.
+With JavaScript, the form opens a search dialog. Ctrl/Cmd+K also opens it.
+Escape closes the dialog and restores focus.
+
+| Route | Result |
+| --- | --- |
+| `/_auxesia/search` | An HTML results page with pagination. |
+| `/_auxesia/search.json` | JSON with `results` and `total`. Each result contains `title`, `url`, and `excerpt`. |
+
+Both routes accept `GET` and `HEAD` with these query parameters:
+
+| Parameter | Meaning |
+| --- | --- |
+| `q` | Words or double-quoted phrases, up to 512 Unicode characters. |
+| `limit` | Results per response, from 1 to 50. The default is 10. |
+| `offset` | Number of results to skip. The default is 0. |
+
+```sh
+curl --get http://127.0.0.1:8080/_auxesia/search.json \
+  --data-urlencode 'q="access policies"' --data 'limit=5'
+```
+
+All words and phrases must match. Searches ignore letter case and do not use stemming.
+Other punctuation separates words. Boolean operators, field selectors, and typo correction are not supported.
+Title matches have more weight than heading matches. Heading matches have more weight than body matches.
+Results with equal scores sort by URL.
+An empty query returns no results. Invalid pagination, long queries, and unclosed quotes return `400`.
+
+Search includes all published pages, even pages with `index: false`.
+It also includes generated directory listings and skill pages.
+It excludes ignored files, static files, and skill supporting files.
+Directory aliases share one result, which uses the directory URL.
+Result excerpts contain plain text. The browser displays them as text.
+
 ## URLs and caching
 
 Generated navigation, stylesheet, discovery, and download URLs are root-relative.

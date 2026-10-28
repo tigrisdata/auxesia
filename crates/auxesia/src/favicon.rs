@@ -13,12 +13,14 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-pub(crate) const LINKS: &str = concat!(
-    "<link rel=\"icon\" href=\"/.auxesia/gen/favicon.ico\" sizes=\"16x16 32x32 48x48\">",
-    "<link rel=\"icon\" type=\"image/png\" sizes=\"16x16\" href=\"/.auxesia/gen/favicon-16x16.png\">",
-    "<link rel=\"icon\" type=\"image/png\" sizes=\"32x32\" href=\"/.auxesia/gen/favicon-32x32.png\">",
-    "<link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"/.auxesia/gen/apple-touch-icon.png\">",
-);
+pub(crate) fn links() -> maud::Markup {
+    maud::html! {
+        link rel="icon" href="/.auxesia/gen/favicon.ico" sizes="16x16 32x32 48x48";
+        link rel="icon" type="image/png" sizes="16x16" href="/.auxesia/gen/favicon-16x16.png";
+        link rel="icon" type="image/png" sizes="32x32" href="/.auxesia/gen/favicon-32x32.png";
+        link rel="apple-touch-icon" sizes="180x180" href="/.auxesia/gen/apple-touch-icon.png";
+    }
+}
 
 pub(crate) fn generate(site: &Site, routes: &mut BTreeMap<String, Route>) -> Result<(), String> {
     let Some(path) = &site.config.favicon else {
