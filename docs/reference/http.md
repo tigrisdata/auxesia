@@ -102,9 +102,16 @@ See [Skills](/reference/skills.md) for archive routes and bundle layout.
 Eligible files that are not page sources retain their relative paths.
 Auxesia serves their captured bytes with a MIME type based on the filename.
 Unknown extensions use `application/octet-stream`.
+Files inside the root `static/` folder are also static files, including Markdown and HTML.
+For example, `static/logo.svg` is available at `/static/logo.svg`.
+The folder and its subfolders have no directory routes or discovery entries.
+
 Supporting Markdown files inside skill bundles are static files.
 They do not use page negotiation.
 The `.skill` downloads use `application/zip` and an attachment filename.
+
+When `favicon` is configured, generated icons use `/.auxesia/gen/` URLs.
+See [Favicon configuration](/reference/configuration.md#favicon) for the generated filenames and sizes.
 
 Auxesia generates `/llms.txt` as `text/plain; charset=utf-8`.
 It includes the site title, `llms.header`, agent guidance, documentation links, skill links, and archive links.
