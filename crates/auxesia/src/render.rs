@@ -302,7 +302,7 @@ pub fn build_cached(mut site: Site, previous: Option<&Snapshot>) -> Result<Snaps
                     source.push_str(&format!("- [{}]({})\n", md_label(&label), url(&link)));
                 }
                 Route::Page {
-                    html: shell(&site, &route, &title, None, &markdown(&source)).into(),
+                    html: shell(&site, &route, &title, None, &PreEscaped(markdown(&source))).into(),
                     markdown: source.into_bytes().into(),
                 }
             }
@@ -323,7 +323,14 @@ pub fn build_cached(mut site: Site, previous: Option<&Snapshot>) -> Result<Snaps
             &mut routes,
             "/skills/".into(),
             Route::Page {
-                html: shell(&site, "/skills/", "Skills", None, &markdown(source)).into(),
+                html: shell(
+                    &site,
+                    "/skills/",
+                    "Skills",
+                    None,
+                    &PreEscaped(markdown(source)),
+                )
+                .into(),
                 markdown: Arc::from(source.as_bytes()),
             },
             &mut errors,
@@ -445,7 +452,7 @@ fn page_route(site: &Site, path: &str, page: &Page) -> Route {
             p { a class="skill-download" download href=(url(&format!("/skills/{slug}.skill"))) { "Download skill (.skill)" } }
         }
         (PreEscaped(render_markdown(&page.body, base.as_deref())))
-    }.into_string();
+    };
     Route::Page {
         html: shell(site, path, &page.title, page.description.as_deref(), &body).into(),
         markdown: page.source.clone(),
@@ -487,8 +494,8 @@ fn entries(site: &Site, dir: &str) -> BTreeMap<String, String> {
     entries
 }
 
-fn shell(site: &Site, path: &str, title: &str, description: Option<&str>, body: &str) -> String {
-    page_layout(site, path, title, description).render(PreEscaped(body.to_owned()))
+fn shell(site: &Site, path: &str, title: &str, description: Option<&str>, body: &Markup) -> String {
+    page_layout(site, path, title, description).render(body.clone())
 }
 
 #[derive(Debug)]
@@ -559,7 +566,7 @@ fn page_layout(site: &Site, path: &str, title: &str, description: Option<&str>) 
         header class="header" {
             h1 class="headerTitle" {
                 a href="/" {
-                    @if site.config.favicon.is_some() { img class="headerIcon" src="/.auxesia/gen/favicon-32x32.png" alt=""; " " }
+                    @if site.config.favicon.is_some() { img class="headerIcon" src="/_auxesia/gen/favicon-32x32.png" alt=""; " " }
                     (site_title)
                 }
                 " " span class="headerSubtitle" { (&site.config.subtitle) }

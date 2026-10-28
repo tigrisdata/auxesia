@@ -125,3 +125,15 @@ fn rejects_symlinks_but_does_not_validate_ignored_links() {
     put(&root, ".auxesia.yaml", "ignore: [outside]\n");
     assert!(build(root.path()).is_ok());
 }
+
+#[test]
+fn rendered_pages_are_complete_html_documents() {
+    let root = TempDir::new().unwrap();
+    put(&root, "index.md", "---\ntitle: Home\n---\n**Hello**\n");
+    let snapshot = auxesia::render::build(build(root.path()).unwrap()).unwrap();
+    let auxesia::render::Route::Page { html, .. } = &snapshot.routes["/"] else {
+        panic!("expected page");
+    };
+    assert!(html.ends_with("</body></html>"));
+    assert!(html.contains("<strong>Hello</strong>"));
+}

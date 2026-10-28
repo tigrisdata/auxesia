@@ -15,10 +15,10 @@ use std::{
 
 pub(crate) fn links() -> maud::Markup {
     maud::html! {
-        link rel="icon" href="/.auxesia/gen/favicon.ico" sizes="16x16 32x32 48x48";
-        link rel="icon" type="image/png" sizes="16x16" href="/.auxesia/gen/favicon-16x16.png";
-        link rel="icon" type="image/png" sizes="32x32" href="/.auxesia/gen/favicon-32x32.png";
-        link rel="apple-touch-icon" sizes="180x180" href="/.auxesia/gen/apple-touch-icon.png";
+        link rel="icon" href="/_auxesia/gen/favicon.ico" sizes="16x16 32x32 48x48";
+        link rel="icon" type="image/png" sizes="16x16" href="/_auxesia/gen/favicon-16x16.png";
+        link rel="icon" type="image/png" sizes="32x32" href="/_auxesia/gen/favicon-32x32.png";
+        link rel="apple-touch-icon" sizes="180x180" href="/_auxesia/gen/apple-touch-icon.png";
     }
 }
 
@@ -137,7 +137,7 @@ pub(crate) fn generate(site: &Site, routes: &mut BTreeMap<String, Route>) -> Res
 
 fn insert(routes: &mut BTreeMap<String, Route>, name: &str, bytes: Vec<u8>, mime: &str) {
     routes.insert(
-        format!("/.auxesia/gen/{name}"),
+        format!("/_auxesia/gen/{name}"),
         Route::Blob {
             bytes: bytes.into(),
             content_type: mime.into(),
