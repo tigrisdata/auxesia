@@ -1,4 +1,5 @@
 ---
+navbar: Skills
 title: Skills
 description: Publish agent instructions as Markdown pages and downloadable skill archives.
 ---

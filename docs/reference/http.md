@@ -1,4 +1,5 @@
 ---
+navbar: HTTP
 title: HTTP reference
 description: Understand page representations, directory routes, redirects, static files, and discovery responses.
 ---

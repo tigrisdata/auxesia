@@ -518,6 +518,26 @@ fn shell(site: &Site, path: &str, title: &str, description: Option<&str>, body: 
     let mut navigation: Vec<_> = entries(site, dir)
         .into_iter()
         .filter(|(link, _)| Some(link) != directory)
+        .map(|(link, _)| {
+            let label = if link.ends_with('/') {
+                directory_page(site, &link)
+                    .filter(|(_, page)| page.index)
+                    .and_then(|(_, page)| page.navbar.clone())
+                    .unwrap_or_else(|| {
+                        link.trim_end_matches('/')
+                            .rsplit('/')
+                            .next()
+                            .unwrap()
+                            .to_owned()
+                    })
+            } else {
+                let page = &site.pages[&link];
+                page.navbar
+                    .clone()
+                    .unwrap_or_else(|| page.source_path.rsplit('/').next().unwrap().to_owned())
+            };
+            (link, label)
+        })
         .collect();
     navigation.sort_by_cached_key(|(link, title)| {
         (

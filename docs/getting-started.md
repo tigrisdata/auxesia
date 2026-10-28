@@ -1,4 +1,5 @@
 ---
+navbar: Get started
 title: Get started
 description: Run the Auxesia documentation, install the server, and serve your own pages.
 ---

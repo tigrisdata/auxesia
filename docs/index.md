@@ -1,4 +1,5 @@
 ---
+navbar: Home
 title: Auxesia
 description: Serve Markdown documentation and downloadable skills from a local folder.
 ---
