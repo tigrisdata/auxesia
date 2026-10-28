@@ -955,3 +955,95 @@ async fn navbar_overrides_are_escaped_and_do_not_replace_metadata() {
     let llms = String::from_utf8(request(&app, "/llms.txt", None, "GET").await.2).unwrap();
     assert!(llms.contains("[Another title](/custom.md)"));
 }
+
+#[tokio::test]
+async fn svg_favicons_render_with_transparency_and_refresh_atomically() {
+    let root = TempDir::new().unwrap();
+    put(&root, ".auxesia.yaml", "favicon: static/logo.svg\n");
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 32"><rect width="64" height="32" fill="red" fill-opacity="0.5"/></svg>"#;
+    put(&root, "static/logo.svg", svg);
+    let app = App::open(root.path(), true).unwrap();
+    for (name, size) in [
+        ("favicon.ico", 48),
+        ("favicon-16x16.png", 16),
+        ("favicon-32x32.png", 32),
+        ("apple-touch-icon.png", 180),
+    ] {
+        let path = format!("/.auxesia/gen/{name}");
+        let (status, _, body) = request(&app, &path, None, "GET").await;
+        assert_eq!(status, StatusCode::OK);
+        let decoded = image::load_from_memory(&body).unwrap().to_rgba8();
+        assert_eq!(decoded.dimensions(), (size, size));
+        assert_eq!(decoded.get_pixel(size / 2, size / 2).0, [255, 0, 0, 128]);
+        assert_eq!(decoded.get_pixel(size / 2, size / 8).0[3], 0);
+        assert_eq!(decoded.get_pixel(size / 8, size / 2).0, [255, 0, 0, 128]);
+    }
+    let path = "/.auxesia/gen/favicon-32x32.png";
+    let original = request(&app, path, None, "GET").await.2;
+    put(&root, "static/logo.svg", "<svg");
+    assert_eq!(request(&app, path, None, "GET").await.2, original);
+    let error = App::open(root.path(), false).err().unwrap().to_string();
+    assert!(
+        error.contains("favicon") && error.contains("static/logo.svg"),
+        "{error}"
+    );
+    put(&root, "static/logo.svg", &svg.replace("red", "blue"));
+    assert_ne!(request(&app, path, None, "GET").await.2, original);
+}
+
+#[tokio::test]
+async fn svg_favicons_do_not_load_external_images() {
+    let outside = TempDir::new().unwrap();
+    let image_path = outside.path().join("private.png");
+    image::RgbaImage::from_pixel(16, 16, image::Rgba([0, 255, 0, 255]))
+        .save(&image_path)
+        .unwrap();
+    let root = TempDir::new().unwrap();
+    put(&root, ".auxesia.yaml", "favicon: static/logo.svg\n");
+    put(
+        &root,
+        "static/logo.svg",
+        &format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="red"/><image href="{}" width="16" height="16"/></svg>"#,
+            image_path.display()
+        ),
+    );
+    let app = App::open(root.path(), false).unwrap();
+    let (_, _, body) = request(&app, "/.auxesia/gen/favicon-16x16.png", None, "GET").await;
+    let decoded = image::load_from_memory(&body).unwrap().to_rgba8();
+    assert_eq!(decoded.get_pixel(8, 8).0, [255, 0, 0, 255]);
+}
+
+#[tokio::test]
+async fn svg_favicons_apply_decode_limits_to_embedded_rasters() {
+    for width in [16, 4097] {
+        let root = TempDir::new().unwrap();
+        put(&root, ".auxesia.yaml", "favicon: static/logo.svg\n");
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::RgbaImage::from_pixel(width, 16, image::Rgba([0, 255, 0, 255]))
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let data =
+            percent_encoding::percent_encode(png.get_ref(), percent_encoding::NON_ALPHANUMERIC);
+        put(
+            &root,
+            "static/logo.svg",
+            &format!(
+                r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><image href="data:image/png,{data}" width="16" height="16" preserveAspectRatio="none"/></svg>"#
+            ),
+        );
+        let result = App::open(root.path(), false);
+        if width == 4097 {
+            let error = result
+                .err()
+                .expect("oversized embedded raster must fail")
+                .to_string();
+            assert!(error.contains("favicon"), "{error}");
+        } else {
+            let app = result.unwrap();
+            let (_, _, body) = request(&app, "/.auxesia/gen/favicon-16x16.png", None, "GET").await;
+            let decoded = image::load_from_memory(&body).unwrap().to_rgba8();
+            assert_eq!(decoded.get_pixel(8, 8).0, [0, 255, 0, 255]);
+        }
+    }
+}

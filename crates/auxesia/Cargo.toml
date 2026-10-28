@@ -24,6 +24,8 @@ mcpkit-core = "0.7"
 serde_json = "1"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "ico", "webp"] }
 
+resvg = "0.49"
+
 [dev-dependencies]
 tempfile = "3"
 tower = { version = "0.5", features = ["util"] }

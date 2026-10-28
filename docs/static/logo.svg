@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Auxesia</title>
+  <desc id="desc">A geodesic dome with blue reflective glass triangles above a green patch of grass.</desc>
+  <defs>
+    <linearGradient id="grass" x1="0" y1="0" x2="0.8" y2="1">
+      <stop stop-color="#a3dc63"/>
+      <stop offset="1" stop-color="#28925d"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#grass)" d="M34 363C34 334 133 312 256 312s222 22 222 51-99 66-222 66S34 392 34 363Z"/>
+  <path fill="#176c55" opacity=".28" d="M64 352c31-23 113-36 192-36s161 13 192 36c-24 31-105 52-192 52S88 383 64 352Z"/>
+  <g stroke="#174f66" stroke-width="4" stroke-linejoin="round">
+    <path fill="#b9edfa" d="m256 86-96 30 60 52Z"/>
+    <path fill="#7cd2ef" d="m256 86-36 82h72Z"/>
+    <path fill="#48b4e2" d="m256 86 36 82 60-52Z"/>
+    <path fill="#83d9ee" d="m160 116-58 68 118-16Z"/>
+    <path fill="#2598d3" d="m352 116-60 52 118 16Z"/>
+    <path fill="#54bce4" d="m102 184-32 116 86-36Z"/>
+    <path fill="#a1e4f3" d="m102 184 54 80 64-96Z"/>
+    <path fill="#58b9e0" d="m220 168-64 96 100 16Z"/>
+    <path fill="#d6f5fa" d="m220 168 36 112 36-112Z"/>
+    <path fill="#2f9ed2" d="m292 168-36 112 100-16Z"/>
+    <path fill="#65c6e7" d="m292 168 64 96 54-80Z"/>
+    <path fill="#167fb9" d="m410 184-54 80 86 36Z"/>
+    <path fill="#439fbc" d="m70 300-6 48 84 30Z"/>
+    <path fill="#87d6c1" d="m70 300 78 78 8-114Z"/>
+    <path fill="#48b4b2" d="m156 264-8 114 108-98Z"/>
+    <path fill="#7ccc8d" d="m156 264 100 16-108 98Z" opacity=".2" stroke="none"/>
+    <path fill="#a1dda0" d="m256 280-108 98 108 12Z"/>
+    <path fill="#4ab48d" d="m256 280 0 110 108-12Z"/>
+    <path fill="#329da5" d="m256 280 108 98-8-114Z"/>
+    <path fill="#247d94" d="m356 264 8 114 78-78Z"/>
+    <path fill="#206d7d" d="m442 300-78 78 84-30Z"/>
+  </g>
+  <path fill="none" stroke="#174f66" stroke-width="6" stroke-linejoin="round" d="m256 86-96 30-58 68-32 116-6 48 84 30 108 12 108-12 84-30-6-48-32-116-58-68Z"/>
+  <g fill="none" stroke="#d3ef99" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m78 385-6-12m6 12 5-8m329 17 6-14m-6 14-4-8m-212 22-3-10m3 10 6-6"/>
+  </g>
+</svg>
