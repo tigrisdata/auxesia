@@ -1,4 +1,5 @@
 ---
+navbar: Operations
 title: Operations reference
 description: Understand startup errors, request refreshes, snapshot publication, and deployment limits.
 ---

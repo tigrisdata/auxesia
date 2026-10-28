@@ -1,4 +1,5 @@
 ---
+navbar: Deploy with Docker
 title: Deploy with Docker
 description: Build the Docker image, serve a documentation folder, and publish images to GHCR.
 ---

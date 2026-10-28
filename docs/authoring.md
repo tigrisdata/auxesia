@@ -1,4 +1,5 @@
 ---
+navbar: Write pages
 title: Write pages
 description: Write Markdown pages with frontmatter, links, directory pages, and local assets.
 ---
@@ -13,6 +14,7 @@ Create a file such as `guide.md` in the documentation folder:
 ```markdown
 ---
 title: Project guide
+navbar: Guide
 description: Learn how to use the project.
 ---
 # Project guide
@@ -20,7 +22,7 @@ description: Learn how to use the project.
 This page explains the project.
 ```
 
-The file is available at `/guide.md`. The `title` supplies navigation labels and HTML metadata. The Markdown body supplies the visible page content.
+The file is available at `/guide.md`. The `title` supplies HTML metadata and discovery entries. The Markdown body supplies the visible page content.
 
 The `description` supplies HTML metadata and the summary in `/llms.txt`. A missing or blank description causes a warning. It does not prevent the server from publishing the page.
 
@@ -66,11 +68,19 @@ For example, `reference/index.md` supplies the page at `/reference/`. The file a
 
 Without either file, Auxesia generates a directory page from the indexed pages. The root directory uses the same rules.
 
-Folder links use the title from `index.md`, or from `README.md` when no index exists.
-Without a discoverable directory page, Auxesia converts the folder name into a readable label, such as “Getting started.”
+Navbar links use exact filenames, including the `.md` suffix.
+The optional `navbar` field replaces this label.
+For example, `navbar: Guide` shows “Guide” instead of “guide.md”.
+Missing, null, empty, or whitespace-only values use the filename.
+
+Folder links use the folder name.
+A discoverable `index.md` can override this label with `navbar`.
+If no index exists, Auxesia uses the `navbar` value from a discoverable `README.md`.
+
+Skill links use the source filename, such as `SKILL.md`, unless the skill frontmatter supplies `navbar`.
 
 The header keeps `.` and `..` first, then lists folders before pages.
-Each group sorts alphabetically by display title, ignoring case. Folder links include an outline icon.
+Each group sorts alphabetically by display label, ignoring case. Folder links include an outline icon.
 The current directory's `index.md` appears only as `.` in the header.
 
 ## Control discovery

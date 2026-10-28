@@ -1,4 +1,5 @@
 ---
+navbar: MCP
 title: MCP reference
 description: Connect an MCP client to /mcp to list skills and read their files with tools.
 ---

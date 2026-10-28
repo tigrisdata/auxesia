@@ -1,4 +1,5 @@
 ---
+navbar: Serve Auxesia
 name: serve-auxesia
 description: Run Auxesia from its Docker image and inspect documentation, Markdown, discovery, and skill archive responses.
 ---

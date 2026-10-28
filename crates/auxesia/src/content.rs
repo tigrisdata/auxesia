@@ -47,6 +47,7 @@ pub struct Capture {
 #[derive(Clone, Debug)]
 pub struct Page {
     pub title: String,
+    pub navbar: Option<String>,
     pub description: Option<String>,
     pub index: bool,
     pub source: Arc<[u8]>,
@@ -69,6 +70,8 @@ pub struct Site {
 
 #[derive(Deserialize)]
 struct Frontmatter {
+    #[serde(default, deserialize_with = "crate::config::optional_string")]
+    navbar: Option<String>,
     #[serde(default, deserialize_with = "crate::config::optional_string")]
     title: Option<String>,
     #[serde(default, deserialize_with = "crate::config::optional_string")]
@@ -473,6 +476,7 @@ fn parse_page(
     }
     Ok(Page {
         title,
+        navbar: meta.navbar.filter(|v| !v.trim().is_empty()),
         description,
         index: meta.index,
         source: file.bytes.clone(),

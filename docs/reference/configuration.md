@@ -1,4 +1,5 @@
 ---
+navbar: Configuration
 title: Configuration reference
 description: Configure site metadata, custom CSS, ignored paths, and page frontmatter.
 ---
@@ -144,14 +145,15 @@ index: true
 
 | Field | Type | Default | Behavior |
 | --- | --- | --- | --- |
-| `title` | String | Required for documentation | Title in the HTML page, navigation, and discovery entries. |
-| `name` | String | Required for skill entrypoints | Skill title in the HTML page, navigation, and discovery entries. |
+| `title` | String | Required for documentation | Title in the HTML page and discovery entries. |
+| `name` | String | Required for skill entrypoints | Skill title in the HTML page and discovery entries. |
+| `navbar` | Optional string | Filename or folder name | Navbar label override. Missing, null, empty, or whitespace-only values use the default. |
 | `description` | Optional string | None | HTML description metadata and text in `/llms.txt`. |
 | `index` | Boolean | `true` | Include the page in directory navigation and `/llms.txt`. |
 
 Missing, null, empty, or whitespace-only descriptions produce warnings.
 They do not prevent publication.
-The `title`, `name`, and `description` fields accept strings or null, but required titles and names cannot be null.
+The `title`, `name`, `navbar`, and `description` fields accept strings or null, but required titles and names cannot be null.
 Unknown frontmatter fields are accepted.
 
 The `index: false` value hides a page from discovery.

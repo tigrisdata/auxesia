@@ -134,7 +134,7 @@ async fn footer_supports_markdown_defaults_and_removal() {
 }
 
 #[tokio::test]
-async fn header_uses_dot_for_index_and_sorts_links_by_title() {
+async fn header_uses_dot_for_index_and_sorts_links_by_filename() {
     let root = TempDir::new().unwrap();
     for prefix in ["", "guide/"] {
         put(
@@ -170,10 +170,10 @@ async fn header_uses_dot_for_index_and_sorts_links_by_title() {
         };
         assert!(nav.contains(&format!("href=\"{dir}\">.</a>")));
         assert!(!nav.contains("index.md"));
-        assert!(nav.find(">apple</a>").unwrap() < nav.find(">Zebra</a>").unwrap());
-        assert!(nav.find(">.</a>").unwrap() < nav.find(">apple</a>").unwrap());
+        assert!(nav.find(">a.md</a>").unwrap() < nav.find(">z.md</a>").unwrap());
+        assert!(nav.find(">.</a>").unwrap() < nav.find(">a.md</a>").unwrap());
         if dir == "/guide/" {
-            assert!(nav.find(">..</a>").unwrap() < nav.find(">apple</a>").unwrap());
+            assert!(nav.find(">..</a>").unwrap() < nav.find(">a.md</a>").unwrap());
         }
     }
     assert_eq!(
@@ -185,7 +185,7 @@ async fn header_uses_dot_for_index_and_sorts_links_by_title() {
 }
 
 #[tokio::test]
-async fn header_groups_folders_and_uses_directory_titles_or_readable_names() {
+async fn header_groups_folders_and_uses_navbar_overrides_or_folder_names() {
     let root = TempDir::new().unwrap();
     for (path, title) in [
         ("z-folder/index.md", "Alpha & reference"),
@@ -205,7 +205,7 @@ async fn header_groups_folders_and_uses_directory_titles_or_readable_names() {
         put(
             &root,
             path,
-            &format!("---\ntitle: {title}\n{hidden}---\nBody"),
+            &format!("---\ntitle: {title}\nnavbar: {title}\n{hidden}---\nBody"),
         );
     }
     let app = App::open(root.path(), false).unwrap();
@@ -219,8 +219,8 @@ async fn header_groups_folders_and_uses_directory_titles_or_readable_names() {
         .unwrap();
     let labels = [
         "Alpha &amp; reference",
-        "Getting started",
-        "Private notes",
+        "getting-started",
+        "private-notes",
         "Zulu guides",
         "apple page",
         "Zebra page",
@@ -228,7 +228,7 @@ async fn header_groups_folders_and_uses_directory_titles_or_readable_names() {
     let positions: Vec<_> = labels
         .iter()
         .map(|label| {
-            nav.find(label)
+            nav.find(&format!("{label}</a>"))
                 .unwrap_or_else(|| panic!("missing {label}: {nav}"))
         })
         .collect();
@@ -610,7 +610,7 @@ async fn sidebar_hides_the_page_that_supplies_the_directory() {
         let html = String::from_utf8(request(&app, path, None, "GET").await.2).unwrap();
         let nav = nav(&html);
         assert!(nav.contains("href=\"/guide/\">.</a>"), "{path}: {nav}");
-        assert!(nav.contains(">Child</a>"), "{path}: {nav}");
+        assert!(nav.contains(">child.md</a>"), "{path}: {nav}");
         assert!(!nav.contains("README.md"), "{path}: {nav}");
         assert!(!nav.contains("Readme title"), "{path}: {nav}");
     }
@@ -624,7 +624,7 @@ async fn sidebar_hides_the_page_that_supplies_the_directory() {
     let nav = nav(&html);
     assert!(!nav.contains("index.md"), "{nav}");
     assert!(
-        nav.contains("href=\"/guide/README.md\">Readme title</a>"),
+        nav.contains("href=\"/guide/README.md\">README.md</a>"),
         "{nav}"
     );
 }
@@ -914,4 +914,44 @@ async fn favicon_outputs_are_images_and_refresh_atomically() {
         StatusCode::NOT_FOUND
     );
     assert!(!root.path().join(".auxesia").exists());
+}
+
+#[tokio::test]
+async fn navbar_overrides_are_escaped_and_do_not_replace_metadata() {
+    let root = TempDir::new().unwrap();
+    for (path, metadata) in [
+        ("plain.md", "title: Full page title"),
+        ("custom.md", "title: Another title\nnavbar: 'Short & sweet'"),
+        ("blank.md", "title: Blank override\nnavbar: '  '"),
+        ("skills/task/SKILL.md", "name: Task title"),
+        ("skills/other.md", "name: Other title\nnavbar: Custom skill"),
+    ] {
+        put(&root, path, &format!("---\n{metadata}\n---\nBody"));
+    }
+    let app = App::open(root.path(), false).unwrap();
+    for (path, labels) in [
+        (
+            "/custom.md",
+            vec!["plain.md", "Short &amp; sweet", "blank.md"],
+        ),
+        ("/skills/", vec!["SKILL.md", "Custom skill"]),
+    ] {
+        let html = String::from_utf8(request(&app, path, None, "GET").await.2).unwrap();
+        let nav = html
+            .split("<nav ")
+            .nth(1)
+            .unwrap()
+            .split("</nav>")
+            .next()
+            .unwrap();
+        for label in labels {
+            assert!(nav.contains(&format!(">{label}</a>")), "{nav}");
+        }
+        assert!(!nav.contains("Full page title"));
+        if path == "/custom.md" {
+            assert!(html.contains("content=\"Another title\""));
+        }
+    }
+    let llms = String::from_utf8(request(&app, "/llms.txt", None, "GET").await.2).unwrap();
+    assert!(llms.contains("[Another title](/custom.md)"));
 }
