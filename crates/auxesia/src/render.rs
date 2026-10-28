@@ -499,7 +499,13 @@ fn shell(site: &Site, path: &str, title: &str, description: Option<&str>, body: 
             escape(&url(&format!("/{css}")))
         ));
     }
-    html.push_str(&format!("</head><body><header class=\"header\"><h1 class=\"headerTitle\"><a href=\"/\">{}</a> <span class=\"headerSubtitle\">{}</span></h1></header><nav id=\"side-bar\" aria-label=\"Directory\"><ul>", escape(site_title), escape(&site.config.subtitle)));
+    html.push_str("</head><body><header class=\"header\"><h1 class=\"headerTitle\"><a href=\"/\">");
+    if site.config.favicon.is_some() {
+        html.push_str(
+            "<img class=\"headerIcon\" src=\"/.auxesia/gen/favicon-32x32.png\" alt=\"\"> ",
+        );
+    }
+    html.push_str(&format!("{}</a> <span class=\"headerSubtitle\">{}</span></h1></header><nav id=\"side-bar\" aria-label=\"Directory\"><ul>", escape(site_title), escape(&site.config.subtitle)));
     let dir = if path.ends_with('/') {
         path
     } else {
