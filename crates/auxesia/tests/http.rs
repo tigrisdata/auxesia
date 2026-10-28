@@ -1047,3 +1047,33 @@ async fn svg_favicons_apply_decode_limits_to_embedded_rasters() {
         }
     }
 }
+
+#[tokio::test]
+async fn template_values_are_escaped_but_markdown_stays_html() {
+    let root = TempDir::new().unwrap();
+    put(
+        &root,
+        ".auxesia.yaml",
+        "title: 'Docs & <guide>'\nsubtitle: '<em>Subtitle</em>'\nfooter: '**Footer**'\n",
+    );
+    put(
+        &root,
+        "index.md",
+        "---\ntitle: 'Page <title>'\ndescription: 'A \"quote\" & <tag>'\n---\n**Body**\n\n<span>Raw HTML</span>\n",
+    );
+    let app = App::open(root.path(), true).unwrap();
+    let html = String::from_utf8(request(&app, "/", None, "GET").await.2).unwrap();
+    assert!(html.contains("<title>Page &lt;title&gt; — Docs &amp; &lt;guide&gt;</title>"));
+    assert!(html.contains("content=\"A &quot;quote&quot; &amp; &lt;tag&gt;\""));
+    assert!(html.contains("&lt;em&gt;Subtitle&lt;/em&gt;"));
+    assert!(html.contains("<strong>Body</strong>"));
+    assert!(html.contains("<span>Raw HTML</span>"));
+    assert!(html.contains("<strong>Footer</strong>"));
+    assert_eq!(html.matches("</body></html>").count(), 1);
+    put(&root, "<broken>.md", "Missing metadata");
+    let html = String::from_utf8(request(&app, "/", None, "GET").await.2).unwrap();
+    assert!(html.contains("&lt;broken&gt;.md"));
+    assert!(!html.contains("<broken>"));
+    assert!(html.ends_with("</aside></body></html>"));
+    assert_eq!(html.matches("</body></html>").count(), 1);
+}

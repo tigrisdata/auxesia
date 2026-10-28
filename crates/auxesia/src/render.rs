@@ -1,5 +1,6 @@
 use crate::content::{Failure, Page, Site};
 use comrak::{Arena, nodes::NodeValue, parse_document};
+use maud::{DOCTYPE, Markup, PreEscaped, html};
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -35,13 +36,6 @@ pub fn url(path: &str) -> String {
         .map(|part| utf8_percent_encode(part, URL_COMPONENT).to_string())
         .collect::<Vec<_>>()
         .join("/")
-}
-pub fn escape(text: &str) -> String {
-    text.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
 }
 fn md_label(text: &str) -> String {
     text.replace('\\', "\\\\")
@@ -296,7 +290,7 @@ pub fn build_cached(mut site: Site, previous: Option<&Snapshot>) -> Result<Snaps
                     source.push_str(&format!("- [{}]({})\n", md_label(&label), url(&link)));
                 }
                 Route::Page {
-                    html: shell(&site, &route, &title, None, &markdown(&source)).into(),
+                    html: shell(&site, &route, &title, None, &PreEscaped(markdown(&source))).into(),
                     markdown: source.into_bytes().into(),
                 }
             }
@@ -317,7 +311,14 @@ pub fn build_cached(mut site: Site, previous: Option<&Snapshot>) -> Result<Snaps
             &mut routes,
             "/skills/".into(),
             Route::Page {
-                html: shell(&site, "/skills/", "Skills", None, &markdown(source)).into(),
+                html: shell(
+                    &site,
+                    "/skills/",
+                    "Skills",
+                    None,
+                    &PreEscaped(markdown(source)),
+                )
+                .into(),
                 markdown: Arc::from(source.as_bytes()),
             },
             &mut errors,
@@ -424,14 +425,16 @@ fn page_route(site: &Site, path: &str, page: &Page) -> Route {
     let base = page
         .bundle
         .then(|| url(&format!("/skills/{}/", page.skill.as_ref().unwrap())));
-    let mut body = String::new();
-    if let Some(slug) = &page.skill {
-        body.push_str(&format!(
-            "<p><a class=\"skill-download\" download href=\"{}\">Download skill (.skill)</a></p>",
-            escape(&url(&format!("/skills/{slug}.skill")))
-        ));
-    }
-    body.push_str(&render_markdown(&page.body, base.as_deref()));
+    let body = html! {
+        @if let Some(slug) = &page.skill {
+            p {
+                a class="skill-download" download href=(url(&format!("/skills/{slug}.skill"))) {
+                    "Download skill (.skill)"
+                }
+            }
+        }
+        (PreEscaped(render_markdown(&page.body, base.as_deref())))
+    };
     Route::Page {
         html: shell(site, path, &page.title, page.description.as_deref(), &body).into(),
         markdown: page.source.clone(),
@@ -473,53 +476,18 @@ fn entries(site: &Site, dir: &str) -> BTreeMap<String, String> {
     entries
 }
 
-fn shell(site: &Site, path: &str, title: &str, description: Option<&str>, body: &str) -> String {
+fn shell(site: &Site, path: &str, title: &str, description: Option<&str>, body: &Markup) -> String {
     let site_title = site.config.title.as_deref().unwrap_or("Documentation");
     let browser_title = if title == site_title {
         title.to_owned()
     } else {
         format!("{title} — {site_title}")
     };
-    let mut html = format!(
-        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>{}</title><meta property=\"og:title\" content=\"{}\"><meta property=\"og:site_name\" content=\"{}\"><meta property=\"og:type\" content=\"website\">",
-        escape(&browser_title),
-        escape(title),
-        escape(site_title)
-    );
-    if let Some(description) = description {
-        html.push_str(&format!("<meta name=\"description\" content=\"{0}\"><meta property=\"og:description\" content=\"{0}\">", escape(description)));
-    }
-    html.push_str("<link rel=\"stylesheet\" href=\"/_auxesia/style.css\">");
-    if site.config.favicon.is_some() {
-        html.push_str(crate::favicon::LINKS);
-    }
-    if let Some(css) = &site.config.stylesheet {
-        html.push_str(&format!(
-            "<link rel=\"stylesheet\" href=\"{}\">",
-            escape(&url(&format!("/{css}")))
-        ));
-    }
-    html.push_str("</head><body><header class=\"header\"><h1 class=\"headerTitle\"><a href=\"/\">");
-    if site.config.favicon.is_some() {
-        html.push_str(
-            "<img class=\"headerIcon\" src=\"/_auxesia/gen/favicon-32x32.png\" alt=\"\"> ",
-        );
-    }
-    html.push_str(&format!("{}</a> <span class=\"headerSubtitle\">{}</span></h1></header><nav id=\"side-bar\" aria-label=\"Directory\"><ul>", escape(site_title), escape(&site.config.subtitle)));
     let dir = if path.ends_with('/') {
         path
     } else {
         &path[..path.rfind('/').unwrap() + 1]
     };
-    html.push_str(&format!("<li><a href=\"{}\">.</a></li>", escape(&url(dir))));
-    if dir != "/" {
-        let trimmed = dir.trim_end_matches('/');
-        let parent = &trimmed[..trimmed.rfind('/').unwrap() + 1];
-        html.push_str(&format!(
-            "<li><a href=\"{}\">..</a></li>",
-            escape(&url(parent))
-        ));
-    }
     let directory = directory_page(site, dir).map(|(link, _)| link);
     let mut navigation: Vec<_> = entries(site, dir)
         .into_iter()
@@ -553,36 +521,82 @@ fn shell(site: &Site, path: &str, title: &str, description: Option<&str>, body: 
             link.clone(),
         )
     });
-    for (link, label) in navigation {
-        let icon = if link.ends_with('/') {
-            "<svg class=\"folder-icon\" aria-hidden=\"true\" focusable=\"false\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linejoin=\"round\"><path d=\"M3 7V4h6l3 3h9v13H3Z\"/></svg>"
-        } else {
-            ""
-        };
-        html.push_str(&format!(
-            "<li><a href=\"{}\">{icon}{}</a></li>",
-            escape(&url(&link)),
-            escape(&label)
-        ));
-    }
-    html.push_str("</ul></nav><main id=\"main\">");
-    html.push_str(body);
-    if path == "/" {
-        html.push_str(&format!(
-            "<div style=\"display: none\">{}</div>",
-            escape(GUIDANCE)
-        ));
-    }
-    html.push_str("</main>");
     let footer = site
         .config
         .footer
         .as_deref()
         .unwrap_or("Powered by [Auxesia](https://github.com/tigrisdata/auxesia), with ❤️ from the nerds at [Tigris](https://www.tigrisdata.com)");
-    if !footer.trim().is_empty() {
-        html.push_str("<footer id=\"footer\">");
-        html.push_str(&markdown(footer));
-        html.push_str("</footer>");
+    html! {
+        (DOCTYPE)
+        html lang="en" {
+            head {
+                meta charset="utf-8";
+                meta name="viewport" content="width=device-width, initial-scale=1";
+                title { (browser_title) }
+                meta property="og:title" content=(title);
+                meta property="og:site_name" content=(site_title);
+                meta property="og:type" content="website";
+                @if let Some(description) = description {
+                    meta name="description" content=(description);
+                    meta property="og:description" content=(description);
+                }
+                link rel="stylesheet" href="/_auxesia/style.css";
+                @if site.config.favicon.is_some() {
+                    (crate::favicon::links())
+                }
+                @if let Some(css) = &site.config.stylesheet {
+                    link rel="stylesheet" href=(url(&format!("/{css}")));
+                }
+            }
+            body {
+                header class="header" {
+                    h1 class="headerTitle" {
+                        a href="/" {
+                            @if site.config.favicon.is_some() {
+                                img class="headerIcon" src="/_auxesia/gen/favicon-32x32.png" alt="";
+                                " "
+                            }
+                            (site_title)
+                        }
+                        " "
+                        span class="headerSubtitle" { (&site.config.subtitle) }
+                    }
+                }
+                nav id="side-bar" aria-label="Directory" {
+                    ul {
+                        li { a href=(url(dir)) { "." } }
+                        @if dir != "/" {
+                            @let trimmed = dir.trim_end_matches('/');
+                            @let parent = &trimmed[..trimmed.rfind('/').unwrap() + 1];
+                            li { a href=(url(parent)) { ".." } }
+                        }
+                        @for (link, label) in navigation {
+                            li {
+                                a href=(url(&link)) {
+                                    @if link.ends_with('/') {
+                                        svg class="folder-icon" aria-hidden="true" focusable="false"
+                                            viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                            stroke-width="1.8" stroke-linejoin="round" {
+                                            path d="M3 7V4h6l3 3h9v13H3Z" {}
+                                        }
+                                    }
+                                    (label)
+                                }
+                            }
+                        }
+                    }
+                }
+                main id="main" {
+                    (body)
+                    @if path == "/" {
+                        div style="display: none" { (GUIDANCE) }
+                    }
+                }
+                @if !footer.trim().is_empty() {
+                    footer id="footer" { (PreEscaped(markdown(footer))) }
+                }
+            }
+        }
     }
-    html
+    .into_string()
 }
