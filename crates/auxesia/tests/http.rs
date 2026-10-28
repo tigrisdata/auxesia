@@ -74,6 +74,7 @@ async fn skill_pages_use_extensionless_urls_and_offer_download_buttons() {
     );
     let llms = String::from_utf8(request(&app, "/llms.txt", None, "GET").await.2).unwrap();
     assert!(llms.contains("[Deploy](/skills/deploy)"));
+    assert!(llms.contains("\n## Skills\n"));
     assert!(!llms.contains("/skills/deploy.md"));
 }
 
@@ -335,6 +336,7 @@ async fn hides_discovery_but_not_direct_access_and_generates_indices() {
     let (_, _, llms) = request(&app, "/llms.txt", None, "GET").await;
     let llms = String::from_utf8(llms).unwrap();
     assert!(llms.contains("Custom introduction"));
+    assert!(!llms.contains("\n## Skills\n"));
     assert!(llms.contains("Accept: text/markdown"));
     assert!(!llms.contains("hidden.md"));
 }
@@ -650,6 +652,7 @@ async fn skill_ignore_hidden_archive_and_executable_permissions() {
     let app = App::open(root.path(), false).unwrap();
     let llms = String::from_utf8(request(&app, "/llms.txt", None, "GET").await.2).unwrap();
     assert!(!llms.contains("/skills/run"));
+    assert!(!llms.contains("\n## Skills\n"));
     let bytes = request(&app, "/skills/run.skill", None, "GET").await.2;
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
     assert_eq!(zip.len(), 2);

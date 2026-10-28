@@ -339,12 +339,15 @@ pub fn build_cached(mut site: Site, previous: Option<&Snapshot>) -> Result<Snaps
     {
         llms.push_str(&discovery_entry(path, page));
     }
-    llms.push_str("\n## Skills\n\n");
-    for (path, page) in site
+    let mut indexed_skills = site
         .pages
         .iter()
         .filter(|(_, p)| p.index && p.skill.is_some())
-    {
+        .peekable();
+    if indexed_skills.peek().is_some() {
+        llms.push_str("\n## Skills\n\n");
+    }
+    for (path, page) in indexed_skills {
         llms.push_str(&discovery_entry(path, page));
         llms.push_str(&format!(
             "  - [Download skill]({})\n",
