@@ -134,7 +134,7 @@ async fn footer_supports_markdown_defaults_and_removal() {
 }
 
 #[tokio::test]
-async fn header_uses_dot_for_index_and_sorts_links_by_filename() {
+async fn sidebar_shows_site_wide_links_sorted_by_title() {
     let root = TempDir::new().unwrap();
     for prefix in ["", "guide/"] {
         put(
@@ -163,18 +163,13 @@ async fn header_uses_dot_for_index_and_sorts_links_by_filename() {
             .split("</nav>")
             .next()
             .unwrap();
-        let dir = if path.starts_with("/guide/") {
-            "/guide/"
-        } else {
-            "/"
-        };
-        assert!(nav.contains(&format!("href=\"{dir}\">.</a>")));
+        assert!(nav.contains(">Home</a>"));
+        assert!(!nav.contains(">.</a>") && !nav.contains(">..</a>"));
         assert!(!nav.contains("index.md"));
-        assert!(nav.find(">a.md</a>").unwrap() < nav.find(">z.md</a>").unwrap());
-        assert!(nav.find(">.</a>").unwrap() < nav.find(">a.md</a>").unwrap());
-        if dir == "/guide/" {
-            assert!(nav.find(">..</a>").unwrap() < nav.find(">a.md</a>").unwrap());
-        }
+        assert!(nav.find(">apple</a>").unwrap() < nav.find(">Zebra</a>").unwrap());
+        assert!(nav.contains("href=\"/guide/a.md\""));
+        assert!(nav.contains("href=\"/a.md\""));
+        assert_eq!(nav.matches("aria-current=\"page\"").count(), 1);
     }
     assert_eq!(
         request(&app, "/index.md", Some("text/markdown"), "GET")
@@ -219,8 +214,8 @@ async fn header_groups_folders_and_uses_navbar_overrides_or_folder_names() {
         .unwrap();
     let labels = [
         "Alpha &amp; reference",
-        "getting-started",
-        "private-notes",
+        "Getting started",
+        "Private notes",
         "Zulu guides",
         "apple page",
         "Zebra page",
@@ -228,16 +223,16 @@ async fn header_groups_folders_and_uses_navbar_overrides_or_folder_names() {
     let positions: Vec<_> = labels
         .iter()
         .map(|label| {
-            nav.find(&format!("{label}</a>"))
+            nav.find(label)
                 .unwrap_or_else(|| panic!("missing {label}: {nav}"))
         })
         .collect();
     assert!(positions.windows(2).all(|pair| pair[0] < pair[1]));
     assert!(!nav.contains("Hidden title"));
-    assert!(!nav.contains("Unused fallback"));
+    assert!(nav.contains("Unused fallback"));
     assert_eq!(nav.matches("class=\"folder-icon\"").count(), 4);
     assert_eq!(nav.matches("aria-hidden=\"true\"").count(), 4);
-    assert!(nav.find(">.</a>").unwrap() < positions[0]);
+    assert!(nav.find(">Home</a>").unwrap() < positions[0]);
 }
 
 #[tokio::test]
@@ -609,10 +604,10 @@ async fn sidebar_hides_the_page_that_supplies_the_directory() {
     for path in ["/guide/", "/guide/child.md", "/guide/README.md"] {
         let html = String::from_utf8(request(&app, path, None, "GET").await.2).unwrap();
         let nav = nav(&html);
-        assert!(nav.contains("href=\"/guide/\">.</a>"), "{path}: {nav}");
-        assert!(nav.contains(">child.md</a>"), "{path}: {nav}");
+        assert!(nav.contains(">Overview</a>"), "{path}: {nav}");
+        assert!(nav.contains(">Child</a>"), "{path}: {nav}");
         assert!(!nav.contains("README.md"), "{path}: {nav}");
-        assert!(!nav.contains("Readme title"), "{path}: {nav}");
+        assert!(nav.contains("Readme title"), "{path}: {nav}");
     }
     // README.md is an ordinary page when index.md supplies the directory.
     put(
@@ -624,7 +619,7 @@ async fn sidebar_hides_the_page_that_supplies_the_directory() {
     let nav = nav(&html);
     assert!(!nav.contains("index.md"), "{nav}");
     assert!(
-        nav.contains("href=\"/guide/README.md\">README.md</a>"),
+        nav.contains("href=\"/guide/README.md\">Readme title</a>"),
         "{nav}"
     );
 }
@@ -932,9 +927,9 @@ async fn navbar_overrides_are_escaped_and_do_not_replace_metadata() {
     for (path, labels) in [
         (
             "/custom.md",
-            vec!["plain.md", "Short &amp; sweet", "blank.md"],
+            vec!["Full page title", "Short &amp; sweet", "Blank override"],
         ),
-        ("/skills/", vec!["SKILL.md", "Custom skill"]),
+        ("/skills/", vec!["Task title", "Custom skill"]),
     ] {
         let html = String::from_utf8(request(&app, path, None, "GET").await.2).unwrap();
         let nav = html
@@ -947,7 +942,7 @@ async fn navbar_overrides_are_escaped_and_do_not_replace_metadata() {
         for label in labels {
             assert!(nav.contains(&format!(">{label}</a>")), "{nav}");
         }
-        assert!(!nav.contains("Full page title"));
+        assert!(nav.contains("Full page title"));
         if path == "/custom.md" {
             assert!(html.contains("content=\"Another title\""));
         }
@@ -1076,4 +1071,44 @@ async fn template_values_are_escaped_but_markdown_stays_html() {
     assert!(!html.contains("<broken>"));
     assert!(html.ends_with("</aside></body></html>"));
     assert_eq!(html.matches("</body></html>").count(), 1);
+}
+
+#[tokio::test]
+async fn sidebar_expands_ancestors_and_marks_directory_aliases_current() {
+    let root = TempDir::new().unwrap();
+    for (path, metadata) in [
+        ("index.md", "title: Home"),
+        ("guide/index.md", "title: Guide"),
+        ("guide/deep/README.md", "title: Deep guide"),
+        ("guide/deep/page.md", "title: Read this"),
+        ("guide/deep/secret.md", "title: Secret\nindex: false"),
+        ("other/page.md", "title: Other page"),
+        ("guidebook/page.md", "title: Different prefix"),
+    ] {
+        put(&root, path, &format!("---\n{metadata}\n---\nBody"));
+    }
+    let app = App::open(root.path(), false).unwrap();
+    for (path, target) in [
+        ("/guide/deep/page.md", "/guide/deep/page.md"),
+        ("/guide/deep/README.md", "/guide/deep/"),
+        ("/guide/deep/", "/guide/deep/"),
+    ] {
+        let html = String::from_utf8(request(&app, path, None, "GET").await.2).unwrap();
+        let nav = html
+            .split("<nav ")
+            .nth(1)
+            .unwrap()
+            .split("</nav>")
+            .next()
+            .unwrap();
+        assert_eq!(nav.matches("<details open>").count(), 2, "{nav}");
+        assert_eq!(nav.matches("aria-current=\"page\"").count(), 1, "{nav}");
+        assert!(
+            nav.contains(&format!("href=\"{target}\" aria-current=\"page\"")),
+            "{nav}"
+        );
+        assert!(nav.contains("Other page") && nav.contains("Different prefix"));
+        assert!(!nav.contains("Secret"));
+        assert!(!nav.contains(">.</a>") && !nav.contains(">..</a>"));
+    }
 }
