@@ -14,9 +14,9 @@ use std::sync::Weak;
 /// Paths that the MCP router serves. Documentation content must not use them.
 pub const ROUTES: [&str; 2] = ["/mcp", "/mcp/sse"];
 
-const INSTRUCTIONS: &str = "Call list_skills to find a skill, then get_skill to read its SKILL.md instructions and follow them. Read supporting files with read_skill_file. Auxesia only publishes skills. It never runs them.";
+const INSTRUCTIONS: &str = "Call search_docs to find documentation, then read_doc with a result URL to read its original Markdown. Search accepts words and double-quoted phrases, and includes pages hidden from navigation. Call list_skills to find a skill, then get_skill to read its SKILL.md instructions and follow them. Read supporting files with read_skill_file. Auxesia publishes documentation and skills. It never runs them.";
 
-/// Exposes the published skills as read-only MCP tools.
+/// Exposes published documentation and skills as read-only MCP tools.
 pub struct Skills {
     // App owns the router that owns this handler, so a strong reference would be a cycle.
     app: Weak<App>,
@@ -58,6 +58,18 @@ impl ToolHandler for Skills {
                 .with_string_param("name", "Skill slug from list_skills.", true)
                 .with_string_param("path", "File path relative to the skill folder, as get_skill lists it.", true)
                 .annotations(ToolAnnotations::read_only()),
+            Tool::new("search_docs")
+                .description("Search all published documentation, including hidden pages. All words and double-quoted phrases must match. Returns titles, URLs, excerpts, and a total count. Use read_doc to read a result.")
+                .input_schema(json!({"type":"object", "required":["query"], "properties": {
+                    "query":{"type":"string", "maxLength":512},
+                    "limit":{"type":"integer", "minimum":1, "maximum":50, "default":10},
+                    "offset":{"type":"integer", "minimum":0, "default":0}
+                }}))
+                .annotations(ToolAnnotations::read_only()),
+            Tool::new("read_doc")
+                .description("Read a published documentation page as original Markdown, with its title and canonical URL. Accepts a site-relative URL from search_docs or a known page alias. Does not read assets or skill supporting files.")
+                .with_string_param("path", "Site-relative page URL, such as /getting-started.md.", true)
+                .annotations(ToolAnnotations::read_only()),
         ])
     }
 
@@ -74,6 +86,61 @@ impl ToolHandler for Skills {
         let state = app.refresh().await;
         let skills = &state.snapshot.skills;
         let output = match name {
+            "search_docs" => {
+                if let Err(output) = string(&args, "query") {
+                    return Ok(output);
+                }
+                let request = match serde_json::from_value::<crate::search::SearchRequest>(
+                    Value::Object(args),
+                ) {
+                    Ok(request) => request,
+                    Err(error) => {
+                        return Ok(ToolOutput::error(format!(
+                            "Invalid search arguments: {error}"
+                        )));
+                    }
+                };
+                if let Err(error) = request.validate() {
+                    return Ok(ToolOutput::error(error));
+                }
+                let index = state.snapshot.search.clone();
+                let result = tokio::task::spawn_blocking(move || index.search(&request))
+                    .await
+                    .map_err(|e| McpError::internal(e.to_string()))?;
+                match result {
+                    Ok(results) => {
+                        ToolOutput::json(&results).map_err(|e| McpError::internal(e.to_string()))?
+                    }
+                    Err(error) => ToolOutput::error(error),
+                }
+            }
+            "read_doc" => {
+                let path = match string(&args, "path") {
+                    Ok(path) => path,
+                    Err(output) => return Ok(output),
+                };
+                let path = if path.starts_with('/')
+                    && !path.starts_with("//")
+                    && !path.contains(['?', '#'])
+                {
+                    crate::server::decode_path(path)
+                } else {
+                    None
+                };
+                let Some((path, title)) =
+                    path.as_deref().and_then(|p| state.snapshot.search.page(p))
+                else {
+                    return Ok(ToolOutput::error_with_suggestion(
+                        "No published page has this path.",
+                        "Use a site-relative URL from search_docs.",
+                    ));
+                };
+                let render::Route::Page { markdown, .. } = &state.snapshot.routes[path] else {
+                    return Err(McpError::internal("search record does not name a page"));
+                };
+                ToolOutput::json(&json!({"title": title, "url": render::url(path), "markdown": String::from_utf8_lossy(markdown)}))
+                    .map_err(|e| McpError::internal(e.to_string()))?
+            }
             "list_skills" => {
                 let list: Vec<Value> = skills
                     .iter()

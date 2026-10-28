@@ -2,6 +2,7 @@ use crate::{
     content::Failure,
     mcp::{self, Skills},
     render::{self, Route},
+    search::{self, SearchRequest},
     snapshot::{self, ServingState},
 };
 use axum::{
@@ -180,6 +181,9 @@ async fn handle(
     };
     // An invalid path never names a file, so it does not need a scan.
     let state = app.refresh().await;
+    if path == search::HTML_PATH || path == search::JSON_PATH {
+        return search_response(state, &path, uri.query().unwrap_or(""), head).await;
+    }
     let Some(route) = state.snapshot.routes.get(&path) else {
         return response(
             StatusCode::NOT_FOUND,
@@ -264,6 +268,80 @@ async fn handle(
 }
 
 // Bodies are lists of chunks so cached content is sent without copying it.
+async fn search_response(
+    state: Arc<ServingState>,
+    path: &str,
+    query: &str,
+    head: bool,
+) -> Response {
+    let parsed = serde_urlencoded::from_str::<SearchRequest>(query)
+        .map_err(|e| format!("Invalid search parameters: {e}"))
+        .and_then(|request| {
+            request.validate()?;
+            Ok(request)
+        });
+    let json = path == search::JSON_PATH;
+    let error_response = |status, message: String| {
+        if json {
+            response(
+                status,
+                "application/json; charset=utf-8",
+                vec![Bytes::from(
+                    serde_json::json!({"error": message}).to_string(),
+                )],
+                head,
+            )
+        } else {
+            let body = state.snapshot.search_layout.render(maud::html! {
+                h1 { "Search" }
+                p role="alert" { (message) }
+                p { a href=(search::HTML_PATH) { "Try another search" } }
+            });
+            response(
+                status,
+                "text/html; charset=utf-8",
+                vec![Bytes::from(body)],
+                head,
+            )
+        }
+    };
+    let request = match parsed {
+        Ok(request) => request,
+        Err(error) => return error_response(StatusCode::BAD_REQUEST, error),
+    };
+    let index = state.snapshot.search.clone();
+    let work = request.clone();
+    let result = tokio::task::spawn_blocking(move || index.search(&work)).await;
+    let results = match result {
+        Ok(Ok(results)) => results,
+        other => {
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Cannot search documentation: {other:?}"),
+            );
+        }
+    };
+    if json {
+        response(
+            StatusCode::OK,
+            "application/json; charset=utf-8",
+            vec![Bytes::from(serde_json::to_vec(&results).unwrap())],
+            head,
+        )
+    } else {
+        let body = state
+            .snapshot
+            .search_layout
+            .render(search::results_html(&request, &results));
+        response(
+            StatusCode::OK,
+            "text/html; charset=utf-8",
+            vec![Bytes::from(body)],
+            head,
+        )
+    }
+}
+
 fn response(status: StatusCode, content_type: &str, chunks: Vec<Bytes>, head: bool) -> Response {
     let length: usize = chunks.iter().map(Bytes::len).sum();
     Response::builder()
@@ -341,7 +419,7 @@ fn attachment(name: &str) -> HeaderValue {
     .unwrap()
 }
 
-fn decode_path(path: &str) -> Option<String> {
+pub(crate) fn decode_path(path: &str) -> Option<String> {
     let mut decoded = Vec::new();
     for part in path.split('/') {
         // Invalid percent escapes must not silently become literal filenames.

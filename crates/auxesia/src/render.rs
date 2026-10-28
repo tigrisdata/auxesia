@@ -1,6 +1,6 @@
 use crate::content::{Failure, Page, Site};
 use comrak::{Arena, nodes::NodeValue, parse_document};
-use maud::{DOCTYPE, Markup, PreEscaped, html};
+use maud::{Markup, PreEscaped, html};
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -29,7 +29,7 @@ const URL_COMPONENT: &AsciiSet = &CONTROLS
     .add(b'{')
     .add(b'|')
     .add(b'}');
-pub const GUIDANCE: &str = "For agents: read /llms.txt for documentation and skills. Request pages with Accept: text/markdown to get their original Markdown source. Browse /skills/ for skills and download their .skill ZIP archives. Connect an MCP client to /mcp to list skills and read their files with tools. Skills contain instructions to follow, not code executed by Auxesia.";
+pub const GUIDANCE: &str = "For agents: read /llms.txt for documentation and skills. Request pages with Accept: text/markdown to get their original Markdown source. Browse /skills/ for skills and download their .skill ZIP archives. Connect an MCP client to /mcp. Use search_docs to find documentation, read_doc to read a page, and the skill tools to read skills and supporting files. Skills contain instructions to follow, not code executed by Auxesia.";
 
 pub fn url(path: &str) -> String {
     path.split('/')
@@ -65,6 +65,8 @@ pub struct Snapshot {
     pub warnings: Vec<String>,
     pub archives: BTreeMap<String, crate::skills::Archive>,
     pub skills: BTreeMap<String, crate::skills::Skill>,
+    pub search: Arc<crate::search::SearchIndex>,
+    pub search_layout: PageLayout,
 }
 
 pub fn markdown(source: &str) -> String {
@@ -209,6 +211,16 @@ pub fn build(site: Site) -> Result<Snapshot, Failure> {
 pub fn build_cached(mut site: Site, previous: Option<&Snapshot>) -> Result<Snapshot, Failure> {
     let mut routes = BTreeMap::new();
     let mut errors = Vec::new();
+    insert(
+        &mut routes,
+        "/_auxesia/search.js".into(),
+        Route::Blob {
+            bytes: Arc::from(include_bytes!("search.js").as_slice()),
+            content_type: "text/javascript; charset=utf-8".into(),
+            download: None,
+        },
+        &mut errors,
+    );
     if let Err(error) = crate::favicon::generate(&site, &mut routes) {
         errors.push(error);
     }
@@ -380,7 +392,17 @@ pub fn build_cached(mut site: Site, previous: Option<&Snapshot>) -> Result<Snaps
             warnings: site.warnings,
         });
     }
+    let search =
+        crate::search::build(&site, &routes, previous.map(|s| &s.search)).map_err(|error| {
+            Failure {
+                errors: vec![format!("Cannot build search index: {error}")],
+                warnings: site.warnings.clone(),
+            }
+        })?;
+    let search_layout = page_layout(&site, "/", "Search", None);
     Ok(Snapshot {
+        search,
+        search_layout,
         routes,
         fingerprint: site.fingerprint,
         warnings: site.warnings,
@@ -427,11 +449,7 @@ fn page_route(site: &Site, path: &str, page: &Page) -> Route {
         .then(|| url(&format!("/skills/{}/", page.skill.as_ref().unwrap())));
     let body = html! {
         @if let Some(slug) = &page.skill {
-            p {
-                a class="skill-download" download href=(url(&format!("/skills/{slug}.skill"))) {
-                    "Download skill (.skill)"
-                }
-            }
+            p { a class="skill-download" download href=(url(&format!("/skills/{slug}.skill"))) { "Download skill (.skill)" } }
         }
         (PreEscaped(render_markdown(&page.body, base.as_deref())))
     };
@@ -477,11 +495,88 @@ fn entries(site: &Site, dir: &str) -> BTreeMap<String, String> {
 }
 
 fn shell(site: &Site, path: &str, title: &str, description: Option<&str>, body: &Markup) -> String {
+    page_layout(site, path, title, description).render(body.clone())
+}
+
+#[derive(Debug)]
+pub struct PageLayout {
+    head: Markup,
+    header: Markup,
+    navigation: Markup,
+    footer: Markup,
+    guidance: bool,
+}
+
+impl PageLayout {
+    pub fn render(&self, body: Markup) -> String {
+        html! {
+            (maud::DOCTYPE)
+            html lang="en" {
+                head { (self.head) }
+                body {
+                    (self.header)
+                    (self.navigation)
+                    main id="main" {
+                        (body)
+                        @if self.guidance { div style="display: none" { (GUIDANCE) } }
+                    }
+                    (self.footer)
+                    dialog id="search-dialog" aria-labelledby="search-dialog-title" {
+                        h2 id="search-dialog-title" { "Search documentation" }
+                        form id="dialog-search" action=(crate::search::HTML_PATH) method="get" {
+                            label for="dialog-query" { "Words or a quoted phrase" }
+                            input id="dialog-query" name="q" type="search" maxlength="1024" autocomplete="off";
+                            button type="submit" { "See all results" }
+                        }
+                        p id="search-status" role="status" aria-live="polite" { "Enter words or a quoted phrase." }
+                        ol class="search-results" {}
+                        a id="search-all" href=(crate::search::HTML_PATH) { "Open results page" }
+                        button id="search-close" type="button" { "Close search" }
+                    }
+                }
+            }
+        }.into_string()
+    }
+}
+
+fn page_layout(site: &Site, path: &str, title: &str, description: Option<&str>) -> PageLayout {
     let site_title = site.config.title.as_deref().unwrap_or("Documentation");
     let browser_title = if title == site_title {
         title.to_owned()
     } else {
         format!("{title} — {site_title}")
+    };
+    let head = html! {
+        meta charset="utf-8";
+        meta name="viewport" content="width=device-width, initial-scale=1";
+        title { (browser_title) }
+        meta property="og:title" content=(title);
+        meta property="og:site_name" content=(site_title);
+        meta property="og:type" content="website";
+        @if let Some(description) = description {
+            meta name="description" content=(description);
+            meta property="og:description" content=(description);
+        }
+        link rel="stylesheet" href="/_auxesia/style.css";
+        script src="/_auxesia/search.js" defer {}
+        @if site.config.favicon.is_some() { (crate::favicon::links()) }
+        @if let Some(css) = &site.config.stylesheet { link rel="stylesheet" href=(url(&format!("/{css}"))); }
+    };
+    let header = html! {
+        header class="header" {
+            h1 class="headerTitle" {
+                a href="/" {
+                    @if site.config.favicon.is_some() { img class="headerIcon" src="/_auxesia/gen/favicon-32x32.png" alt=""; " " }
+                    (site_title)
+                }
+                " " span class="headerSubtitle" { (&site.config.subtitle) }
+            }
+            form id="site-search" action=(crate::search::HTML_PATH) method="get" {
+                label for="site-query" { "Search documentation" }
+                input id="site-query" type="search" name="q" maxlength="1024";
+                button type="submit" { "Search" }
+            }
+        }
     };
     let dir = if path.ends_with('/') {
         path
@@ -521,82 +616,37 @@ fn shell(site: &Site, path: &str, title: &str, description: Option<&str>, body: 
             link.clone(),
         )
     });
-    let footer = site
-        .config
-        .footer
-        .as_deref()
-        .unwrap_or("Powered by [Auxesia](https://github.com/tigrisdata/auxesia), with ❤️ from the nerds at [Tigris](https://www.tigrisdata.com)");
-    html! {
-        (DOCTYPE)
-        html lang="en" {
-            head {
-                meta charset="utf-8";
-                meta name="viewport" content="width=device-width, initial-scale=1";
-                title { (browser_title) }
-                meta property="og:title" content=(title);
-                meta property="og:site_name" content=(site_title);
-                meta property="og:type" content="website";
-                @if let Some(description) = description {
-                    meta name="description" content=(description);
-                    meta property="og:description" content=(description);
+    let navigation = html! {
+        nav id="side-bar" aria-label="Directory" {
+            ul {
+                li { a href=(url(dir)) { "." } }
+                @if dir != "/" {
+                    @let trimmed = dir.trim_end_matches('/');
+                    @let parent = &trimmed[..trimmed.rfind('/').unwrap() + 1];
+                    li { a href=(url(parent)) { ".." } }
                 }
-                link rel="stylesheet" href="/_auxesia/style.css";
-                @if site.config.favicon.is_some() {
-                    (crate::favicon::links())
-                }
-                @if let Some(css) = &site.config.stylesheet {
-                    link rel="stylesheet" href=(url(&format!("/{css}")));
-                }
-            }
-            body {
-                header class="header" {
-                    h1 class="headerTitle" {
-                        a href="/" {
-                            @if site.config.favicon.is_some() {
-                                img class="headerIcon" src="/_auxesia/gen/favicon-32x32.png" alt="";
-                                " "
-                            }
-                            (site_title)
-                        }
-                        " "
-                        span class="headerSubtitle" { (&site.config.subtitle) }
-                    }
-                }
-                nav id="side-bar" aria-label="Directory" {
-                    ul {
-                        li { a href=(url(dir)) { "." } }
-                        @if dir != "/" {
-                            @let trimmed = dir.trim_end_matches('/');
-                            @let parent = &trimmed[..trimmed.rfind('/').unwrap() + 1];
-                            li { a href=(url(parent)) { ".." } }
-                        }
-                        @for (link, label) in navigation {
-                            li {
-                                a href=(url(&link)) {
-                                    @if link.ends_with('/') {
-                                        svg class="folder-icon" aria-hidden="true" focusable="false"
-                                            viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                            stroke-width="1.8" stroke-linejoin="round" {
-                                            path d="M3 7V4h6l3 3h9v13H3Z" {}
-                                        }
-                                    }
-                                    (label)
+                @for (link, label) in navigation {
+                    li {
+                        a href=(url(&link)) {
+                            @if link.ends_with('/') {
+                                svg class="folder-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" {
+                                    path d="M3 7V4h6l3 3h9v13H3Z" {}
                                 }
                             }
+                            (label)
                         }
                     }
-                }
-                main id="main" {
-                    (body)
-                    @if path == "/" {
-                        div style="display: none" { (GUIDANCE) }
-                    }
-                }
-                @if !footer.trim().is_empty() {
-                    footer id="footer" { (PreEscaped(markdown(footer))) }
                 }
             }
         }
+    };
+    let footer = site.config.footer.as_deref().unwrap_or("Powered by [Auxesia](https://github.com/tigrisdata/auxesia), with ❤️ from the nerds at [Tigris](https://www.tigrisdata.com)");
+    let footer = html! { @if !footer.trim().is_empty() { footer id="footer" { (PreEscaped(markdown(footer))) } } };
+    PageLayout {
+        head,
+        header,
+        navigation,
+        footer,
+        guidance: path == "/",
     }
-    .into_string()
 }

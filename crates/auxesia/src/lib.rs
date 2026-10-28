@@ -3,6 +3,7 @@ pub mod content;
 mod favicon;
 pub mod mcp;
 pub mod render;
+pub mod search;
 pub mod server;
 pub mod skills;
 pub mod snapshot;

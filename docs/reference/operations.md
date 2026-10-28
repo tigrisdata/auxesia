@@ -54,7 +54,7 @@ If the second attempt also changes, Auxesia rejects that candidate.
 This comparison detects changes during the build but does not lock the source directory.
 
 Auxesia publishes a complete valid snapshot in one atomic state change.
-The snapshot includes the configuration, pages, static assets, discovery files, and skill archives.
+The snapshot includes the configuration, pages, static assets, discovery files, skill archives, and search index.
 Each request uses one snapshot for its response.
 Requests around a publication can receive different valid snapshots.
 
@@ -74,6 +74,19 @@ The toast lists the errors and asks the reader to fix them and reload.
 Markdown responses, static responses, and archives do not include this toast.
 Auxesia does not push updates to an open browser page.
 A page reload or another request triggers the next refresh.
+
+## Search index
+
+Auxesia builds an in-memory Tantivy index before it publishes a snapshot.
+If indexing fails at startup, the server does not start.
+If indexing fails after startup, the previous pages and index remain available together.
+If searchable content stays the same, the next snapshot reuses the index.
+Asset-only edits do not rebuild it.
+
+Indexing and search run on blocking workers, separate from async request processing.
+Search has no disk cache, external service, or Node.js process.
+The initial target is up to 1,000 pages.
+An update can temporarily retain both the previous index and the candidate index in memory.
 
 ## Source and trust limits
 
@@ -98,7 +111,7 @@ Auxesia does not execute skill code.
 ## Deferred features
 
 The current command serves a local directory.
-It does not manage repository checkouts, Git synchronization, webhooks, or an MCP server.
+It does not manage repository checkouts, Git synchronization, or webhooks.
 Browser live updates and static export are also deferred.
 The server currently has no authentication or authorization layer.
 
