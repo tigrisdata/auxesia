@@ -54,7 +54,7 @@ Other parameters prevent that media range from matching.
 
 ## Methods and status codes
 
-Auxesia accepts `GET` and `HEAD`.
+Documentation routes accept `GET` and `HEAD`.
 A `HEAD` response has the same status and representation headers as `GET`, with an empty body.
 Its `Content-Length` describes the corresponding `GET` body.
 Other methods return `405 Method Not Allowed` with `Allow: GET, HEAD`.
@@ -62,6 +62,17 @@ Other methods return `405 Method Not Allowed` with `Allow: GET, HEAD`.
 Unknown routes return `404 Not Found`.
 Invalid percent escapes, invalid UTF-8 paths, and unsafe path components return `400 Bad Request`.
 Unsafe components include `.` and `..`, or decoded slashes, backslashes, and null characters.
+
+The MCP routes use different method rules:
+
+| Route | Methods | Other methods |
+| --- | --- | --- |
+| `/mcp` | `POST`, `GET`, `HEAD`, `DELETE` | `405` with `Allow: POST,GET,HEAD,DELETE` |
+| `/mcp/sse` | `GET`, `HEAD` | `405` with `Allow: GET,HEAD` |
+
+On these routes, a request without an `mcp-session-id` header returns `400 Bad Request`.
+The only exception is a `POST` with an `initialize` message.
+See [MCP](/reference/mcp.md#http-methods-and-status-codes) for all MCP status codes.
 
 ## Directory routes and redirects
 
@@ -99,8 +110,9 @@ Auxesia generates `/llms.txt` as `text/plain; charset=utf-8`.
 It includes the site title, `llms.header`, agent guidance, documentation links, skill links, and archive links.
 Pages with `index: false` do not appear in this file.
 The source tree cannot define `llms.txt` or files beneath `_auxesia/` because these routes are reserved.
+The `/mcp` and `/mcp/sse` routes are also reserved for the [MCP endpoint](/reference/mcp.md).
 
-Root HTML contains hidden agent guidance about `/llms.txt`, Markdown requests, skills, and downloads.
+Root HTML contains hidden agent guidance about `/llms.txt`, Markdown requests, skills, downloads, and the MCP endpoint.
 The guidance does not appear in the original Markdown response.
 
 ## URLs and caching
@@ -110,6 +122,8 @@ Auxesia does not rewrite URLs in the Markdown body.
 Relative body URLs resolve against the page URL in the browser.
 A bundle page adds a base URL of `/skills/SLUG/` for its supporting files.
 
-Every response includes `Cache-Control: no-store`.
+Every documentation response includes `Cache-Control: no-store`.
 This includes static files, redirects, and errors.
+MCP responses do not include this header.
+The MCP event stream uses `Cache-Control: no-cache`.
 See [Operations](/reference/operations.md) for refresh and snapshot behavior.

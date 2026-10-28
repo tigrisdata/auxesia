@@ -1,5 +1,6 @@
 use crate::{
     content::Failure,
+    mcp::{self, Skills},
     render::{self, Route},
     snapshot::{self, ServingState},
 };
@@ -12,6 +13,7 @@ use axum::{
 };
 use bytes::Bytes;
 use http_body::{Frame, SizeHint};
+use mcpkit_axum::McpRouter;
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use std::{
     collections::VecDeque,
@@ -28,6 +30,7 @@ pub struct App {
     dev: bool,
     state: RwLock<Arc<ServingState>>,
     flight: Mutex<Option<watch::Receiver<Phase>>>,
+    mcp: Router,
 }
 
 impl App {
@@ -40,19 +43,26 @@ impl App {
         for warning in &state.warnings {
             eprintln!("warning: {warning}");
         }
-        Ok(Arc::new(Self {
+        Ok(Arc::new_cyclic(|app| Self {
             root,
             dev,
             state: RwLock::new(Arc::new(state)),
             flight: Mutex::new(None),
+            mcp: McpRouter::new(Skills::new(app.clone()))
+                .post_path(mcp::ROUTES[0])
+                .sse_path(mcp::ROUTES[1])
+                .into_router(),
         }))
     }
 
     pub fn router(self: &Arc<Self>) -> Router {
-        Router::new().fallback(handle).with_state(self.clone())
+        Router::new()
+            .fallback(handle)
+            .with_state(self.clone())
+            .merge(self.mcp.clone())
     }
 
-    async fn refresh(self: &Arc<Self>) -> Arc<ServingState> {
+    pub(crate) async fn refresh(self: &Arc<Self>) -> Arc<ServingState> {
         // An abandoned refresh published nothing, so the request starts another one.
         for _ in 0..3 {
             let mut completion = self.join_or_start();

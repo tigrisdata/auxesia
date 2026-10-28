@@ -22,7 +22,9 @@ Skill links to files outside their archives also produce warnings.
 
 The default listener is `127.0.0.1:8080`.
 The `--listen` argument selects another socket address.
-Ctrl-C requests graceful shutdown.
+Ctrl-C or `SIGTERM` requests graceful shutdown.
+Open requests have 5 seconds to finish.
+After this time, Auxesia stops and closes the remaining connections, such as MCP event streams.
 
 ## Request refreshes
 

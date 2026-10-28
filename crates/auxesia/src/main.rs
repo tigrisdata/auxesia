@@ -1,6 +1,10 @@
 use auxesia::server::App;
 use clap::Parser;
-use std::{net::SocketAddr, path::PathBuf, process::ExitCode};
+use std::{net::SocketAddr, path::PathBuf, process::ExitCode, time::Duration};
+
+/// MCP clients hold `GET /mcp` SSE streams open forever, so graceful shutdown
+/// would never finish on its own. Give in-flight requests this long, then exit.
+const SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
 
 #[derive(Parser)]
 #[command(
@@ -48,14 +52,25 @@ async fn main() -> ExitCode {
         "Auxesia listening on http://{}",
         listener.local_addr().unwrap()
     );
-    match axum::serve(listener, app.router())
-        .with_graceful_shutdown(shutdown())
-        .await
-    {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(error) => {
-            eprintln!("error: {error}");
-            ExitCode::FAILURE
+    let (signalled, on_signal) = tokio::sync::oneshot::channel();
+    let serve = axum::serve(listener, app.router()).with_graceful_shutdown(async move {
+        shutdown().await;
+        let _ = signalled.send(());
+    });
+    tokio::select! {
+        result = serve => match result {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("error: {error}");
+                ExitCode::FAILURE
+            }
+        },
+        _ = async {
+            let _ = on_signal.await;
+            tokio::time::sleep(SHUTDOWN_GRACE).await;
+        } => {
+            eprintln!("warning: connections still open after {SHUTDOWN_GRACE:?}, exiting anyway");
+            ExitCode::SUCCESS
         }
     }
 }

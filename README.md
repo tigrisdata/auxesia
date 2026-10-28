@@ -1,6 +1,6 @@
 # Auxesia
 
-Auxesia serves Markdown documentation and downloadable skills from a local folder. Browsers receive HTML. Agents can request the original Markdown at the same URL.
+Auxesia serves Markdown documentation and downloadable skills from a local folder. Browsers receive HTML. Agents can request the original Markdown at the same URL. MCP clients can read skills with tools at `/mcp`.
 
 Auxesia serves its own documentation from [`docs`](docs/index.md).
 
@@ -50,6 +50,7 @@ auxesia ./docs --listen 127.0.0.1:9000
 - [HTTP reference](docs/reference/http.md)
 - [Operations](docs/reference/operations.md)
 - [Skills](docs/reference/skills.md)
+- [MCP reference](docs/reference/mcp.md)
 - [Example skill](docs/skills/serve-auxesia/SKILL.md)
 
 ## Development

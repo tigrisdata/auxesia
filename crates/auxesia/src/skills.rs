@@ -18,6 +18,16 @@ pub struct Archive {
     pub bytes: Arc<[u8]>,
 }
 
+/// A published skill as MCP clients see it. File bytes share the captured content.
+#[derive(Clone, Debug)]
+pub struct Skill {
+    pub name: String,
+    pub description: Option<String>,
+    pub index: bool,
+    pub page: String,
+    pub files: BTreeMap<String, File>,
+}
+
 fn files<'a>(site: &'a Site, page: &'a Page) -> BTreeMap<String, &'a File> {
     if page.bundle {
         let prefix = format!("skills/{}/", page.skill.as_ref().unwrap());
@@ -35,8 +45,9 @@ pub fn publish(
     previous: Option<&Snapshot>,
     routes: &mut BTreeMap<String, Route>,
     errors: &mut Vec<String>,
-) -> BTreeMap<String, Archive> {
+) -> (BTreeMap<String, Archive>, BTreeMap<String, Skill>) {
     let mut archives = BTreeMap::new();
+    let mut skills = BTreeMap::new();
     for (path, page) in &site.pages {
         let Some(slug) = &page.skill else {
             continue;
@@ -94,8 +105,18 @@ pub fn publish(
             errors,
         );
         archives.insert(slug.clone(), archive);
+        skills.insert(
+            slug.clone(),
+            Skill {
+                name: page.title.clone(),
+                description: page.description.clone(),
+                index: page.index,
+                page: path.clone(),
+                files: entries.into_iter().map(|(p, f)| (p, f.clone())).collect(),
+            },
+        );
     }
-    archives
+    (archives, skills)
 }
 
 fn pack(slug: &str, entries: &BTreeMap<String, &File>) -> Result<Vec<u8>, zip::result::ZipError> {
