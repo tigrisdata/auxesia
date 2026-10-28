@@ -886,7 +886,7 @@ async fn favicon_outputs_are_images_and_refresh_atomically() {
         ("favicon-32x32.png", 32, "image/png"),
         ("apple-touch-icon.png", 180, "image/png"),
     ] {
-        let path = format!("/.auxesia/gen/{name}");
+        let path = format!("/_auxesia/gen/{name}");
         assert!(html.contains(&path));
         let (status, headers, body) = request(&app, &path, None, "GET").await;
         assert_eq!(status, StatusCode::OK);
@@ -899,7 +899,7 @@ async fn favicon_outputs_are_images_and_refresh_atomically() {
         assert!(empty.is_empty());
         assert_eq!(head["content-length"], body.len().to_string());
     }
-    let path = "/.auxesia/gen/favicon.ico";
+    let path = "/_auxesia/gen/favicon.ico";
     let original = request(&app, path, None, "GET").await.2;
     assert_eq!(&original[..6], &[0, 0, 1, 0, 3, 0]);
     fs::write(&source, b"broken").unwrap();
@@ -913,7 +913,7 @@ async fn favicon_outputs_are_images_and_refresh_atomically() {
         request(&app, path, None, "GET").await.0,
         StatusCode::NOT_FOUND
     );
-    assert!(!root.path().join(".auxesia").exists());
+    assert!(!root.path().join("_auxesia").exists());
 }
 
 #[tokio::test]
@@ -969,7 +969,7 @@ async fn svg_favicons_render_with_transparency_and_refresh_atomically() {
         ("favicon-32x32.png", 32),
         ("apple-touch-icon.png", 180),
     ] {
-        let path = format!("/.auxesia/gen/{name}");
+        let path = format!("/_auxesia/gen/{name}");
         let (status, _, body) = request(&app, &path, None, "GET").await;
         assert_eq!(status, StatusCode::OK);
         let decoded = image::load_from_memory(&body).unwrap().to_rgba8();
@@ -978,7 +978,7 @@ async fn svg_favicons_render_with_transparency_and_refresh_atomically() {
         assert_eq!(decoded.get_pixel(size / 2, size / 8).0[3], 0);
         assert_eq!(decoded.get_pixel(size / 8, size / 2).0, [255, 0, 0, 128]);
     }
-    let path = "/.auxesia/gen/favicon-32x32.png";
+    let path = "/_auxesia/gen/favicon-32x32.png";
     let original = request(&app, path, None, "GET").await.2;
     put(&root, "static/logo.svg", "<svg");
     assert_eq!(request(&app, path, None, "GET").await.2, original);
@@ -1009,7 +1009,7 @@ async fn svg_favicons_do_not_load_external_images() {
         ),
     );
     let app = App::open(root.path(), false).unwrap();
-    let (_, _, body) = request(&app, "/.auxesia/gen/favicon-16x16.png", None, "GET").await;
+    let (_, _, body) = request(&app, "/_auxesia/gen/favicon-16x16.png", None, "GET").await;
     let decoded = image::load_from_memory(&body).unwrap().to_rgba8();
     assert_eq!(decoded.get_pixel(8, 8).0, [255, 0, 0, 255]);
 }
@@ -1041,7 +1041,7 @@ async fn svg_favicons_apply_decode_limits_to_embedded_rasters() {
             assert!(error.contains("favicon"), "{error}");
         } else {
             let app = result.unwrap();
-            let (_, _, body) = request(&app, "/.auxesia/gen/favicon-16x16.png", None, "GET").await;
+            let (_, _, body) = request(&app, "/_auxesia/gen/favicon-16x16.png", None, "GET").await;
             let decoded = image::load_from_memory(&body).unwrap().to_rgba8();
             assert_eq!(decoded.get_pixel(8, 8).0, [0, 255, 0, 255]);
         }

@@ -111,7 +111,7 @@ Supporting Markdown files inside skill bundles are static files.
 They do not use page negotiation.
 The `.skill` downloads use `application/zip` and an attachment filename.
 
-When `favicon` is configured, generated icons use `/.auxesia/gen/` URLs.
+When `favicon` is configured, generated icons use `/_auxesia/gen/` URLs.
 See [Favicon configuration](/reference/configuration.md#favicon) for the generated filenames and sizes.
 
 Auxesia generates `/llms.txt` as `text/plain; charset=utf-8`.
