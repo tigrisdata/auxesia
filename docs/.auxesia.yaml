@@ -2,6 +2,7 @@ title: Auxesia
 subtitle: Markdown documentation and downloadable skills
 ignore:
   - plans/**
+favicon: static/logo.svg
 llms:
   header: |
     These pages describe Auxesia and come from its own docs folder.

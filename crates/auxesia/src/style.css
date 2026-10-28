@@ -5,8 +5,9 @@ body { display: flex; flex-direction: column; min-height: 100vh; min-height: 100
 a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; }
 .header { background: var(--header); }
-.headerTitle { margin: 0; padding: .5em 1em; font-size: 1.6rem; }
-.headerTitle a { color: var(--ink); }
+.headerTitle { display: flex; align-items: center; margin: 0; padding: .5em 1em; font-size: 1.6rem; }
+.headerTitle a { display: inline-flex; align-items: center; gap: .25em; color: var(--ink); }
+.headerIcon { width: auto; height: 1em; }
 .headerSubtitle { font-size: .65em; font-weight: normal; margin-left: 1em; }
 #side-bar { background: var(--bar); padding: .3em 1em; }
 #side-bar ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .2em 1em; }
@@ -26,4 +27,4 @@ img, video { max-width: 100%; height: auto; }
 #footer > :first-child { margin-top: 0; }
 #footer > :last-child { margin-bottom: 0; }
 .auxesia-errors { position: fixed; bottom: 1rem; right: 1rem; z-index: 1000; max-width: min(42rem, calc(100vw - 2rem)); max-height: 45vh; overflow: auto; border: 2px solid #b33; background: #fff4f4; color: #500; padding: 1em; box-shadow: 0 2px 8px #999; }
-@media (max-width: 600px) { #main { margin: 0; padding: 1em; } .headerSubtitle { display: block; margin-left: 0; } }
+@media (max-width: 600px) { #main { margin: 0; padding: 1em; } .headerTitle { flex-direction: column; align-items: flex-start; } .headerSubtitle { display: block; margin-left: 0; } }
