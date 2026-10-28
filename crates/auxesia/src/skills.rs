@@ -28,29 +28,6 @@ pub struct Skill {
     pub files: BTreeMap<String, File>,
 }
 
-pub fn catalog(site: &Site) -> BTreeMap<String, Skill> {
-    site.pages
-        .iter()
-        .filter_map(|(path, page)| {
-            let slug = page.skill.as_ref()?;
-            let files = files(site, page)
-                .into_iter()
-                .map(|(path, file)| (path, file.clone()))
-                .collect();
-            Some((
-                slug.clone(),
-                Skill {
-                    name: page.title.clone(),
-                    description: page.description.clone(),
-                    index: page.index,
-                    page: path.clone(),
-                    files,
-                },
-            ))
-        })
-        .collect()
-}
-
 fn files<'a>(site: &'a Site, page: &'a Page) -> BTreeMap<String, &'a File> {
     if page.bundle {
         let prefix = format!("skills/{}/", page.skill.as_ref().unwrap());
@@ -68,8 +45,9 @@ pub fn publish(
     previous: Option<&Snapshot>,
     routes: &mut BTreeMap<String, Route>,
     errors: &mut Vec<String>,
-) -> BTreeMap<String, Archive> {
+) -> (BTreeMap<String, Archive>, BTreeMap<String, Skill>) {
     let mut archives = BTreeMap::new();
+    let mut skills = BTreeMap::new();
     for (path, page) in &site.pages {
         let Some(slug) = &page.skill else {
             continue;
@@ -127,8 +105,18 @@ pub fn publish(
             errors,
         );
         archives.insert(slug.clone(), archive);
+        skills.insert(
+            slug.clone(),
+            Skill {
+                name: page.title.clone(),
+                description: page.description.clone(),
+                index: page.index,
+                page: path.clone(),
+                files: entries.into_iter().map(|(p, f)| (p, f.clone())).collect(),
+            },
+        );
     }
-    archives
+    (archives, skills)
 }
 
 fn pack(slug: &str, entries: &BTreeMap<String, &File>) -> Result<Vec<u8>, zip::result::ZipError> {

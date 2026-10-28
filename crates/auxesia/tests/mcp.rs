@@ -249,6 +249,16 @@ async fn tools_see_edits_without_a_restart() {
 }
 
 #[tokio::test]
+async fn sessions_survive_across_routers() {
+    let root = site();
+    let app = App::open(root.path(), false).unwrap();
+    let mut client = Client::connect(app.router()).await;
+    client.router = app.router();
+    let (_, error) = client.call("list_skills", json!({})).await;
+    assert!(!error);
+}
+
+#[tokio::test]
 async fn rejects_foreign_browser_origins() {
     let root = site();
     let app = App::open(root.path(), false).unwrap();

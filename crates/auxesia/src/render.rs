@@ -260,8 +260,7 @@ pub fn build_cached(mut site: Site, previous: Option<&Snapshot>) -> Result<Snaps
             &mut errors,
         );
     }
-    let archives = crate::skills::publish(&site, previous, &mut routes, &mut errors);
-    let skills = crate::skills::catalog(&site);
+    let (archives, skills) = crate::skills::publish(&site, previous, &mut routes, &mut errors);
     // Diagnostics are calculated independently of archive cache reuse.
     site.warnings.extend(crate::skills::warnings(&site));
     for dir in &site.dirs {

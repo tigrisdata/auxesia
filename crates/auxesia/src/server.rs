@@ -1,5 +1,6 @@
 use crate::{
     content::Failure,
+    mcp::{self, Skills},
     render::{self, Route},
     snapshot::{self, ServingState},
 };
@@ -29,6 +30,7 @@ pub struct App {
     dev: bool,
     state: RwLock<Arc<ServingState>>,
     flight: Mutex<Option<watch::Receiver<Phase>>>,
+    mcp: Router,
 }
 
 impl App {
@@ -41,28 +43,26 @@ impl App {
         for warning in &state.warnings {
             eprintln!("warning: {warning}");
         }
-        Ok(Arc::new(Self {
+        Ok(Arc::new_cyclic(|app| Self {
             root,
             dev,
             state: RwLock::new(Arc::new(state)),
             flight: Mutex::new(None),
+            mcp: McpRouter::new(Skills::new(app.clone()))
+                .post_path(mcp::ROUTES[0])
+                .sse_path(mcp::ROUTES[1])
+                .into_router(),
         }))
     }
 
-    // Build the router once and clone it: each build starts an empty MCP session store.
     pub fn router(self: &Arc<Self>) -> Router {
         Router::new()
             .fallback(handle)
             .with_state(self.clone())
-            .merge(McpRouter::new(crate::mcp::Skills::new(self.clone())).into_router())
+            .merge(self.mcp.clone())
     }
 
-    /// Returns the latest valid state, refreshing it from disk first.
-    pub async fn current(self: &Arc<Self>) -> Arc<ServingState> {
-        self.refresh().await
-    }
-
-    async fn refresh(self: &Arc<Self>) -> Arc<ServingState> {
+    pub(crate) async fn refresh(self: &Arc<Self>) -> Arc<ServingState> {
         // An abandoned refresh published nothing, so the request starts another one.
         for _ in 0..3 {
             let mut completion = self.join_or_start();

@@ -9,7 +9,7 @@ use mcpkit_core::{
 };
 use mcpkit_server::{Context, PromptHandler, ResourceHandler, ServerHandler, ToolHandler};
 use serde_json::{Map, Value, json};
-use std::sync::Arc;
+use std::sync::Weak;
 
 /// Paths that the MCP router serves. Documentation content must not use them.
 pub const ROUTES: [&str; 2] = ["/mcp", "/mcp/sse"];
@@ -18,11 +18,12 @@ const INSTRUCTIONS: &str = "Call list_skills to find a skill, then get_skill to 
 
 /// Exposes the published skills as read-only MCP tools.
 pub struct Skills {
-    app: Arc<App>,
+    // App owns the router that owns this handler, so a strong reference would be a cycle.
+    app: Weak<App>,
 }
 
 impl Skills {
-    pub fn new(app: Arc<App>) -> Self {
+    pub fn new(app: Weak<App>) -> Self {
         Self { app }
     }
 }
@@ -66,7 +67,11 @@ impl ToolHandler for Skills {
         args: Object,
         _: &Context<'_>,
     ) -> Result<ToolOutput, McpError> {
-        let state = self.app.current().await;
+        let app = self
+            .app
+            .upgrade()
+            .ok_or_else(|| McpError::internal("the server is shutting down"))?;
+        let state = app.refresh().await;
         let skills = &state.snapshot.skills;
         let output = match name {
             "list_skills" => {

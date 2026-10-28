@@ -60,6 +60,31 @@ Each tool call refreshes the documentation snapshot, the same as an HTTP request
 An edit to a skill shows in the next tool call without a restart.
 If an edit is not valid, the tools use the last valid snapshot.
 
+## HTTP methods and status codes
+
+The client starts a session with a `POST` of an `initialize` message.
+The response gives the session ID in the `mcp-session-id` header.
+All other requests must send this header.
+
+| Request | Result |
+| --- | --- |
+| `POST /mcp` with `initialize` and no session ID | `200 OK` with a new `mcp-session-id` |
+| `POST /mcp` with a request and a known session ID | `200 OK` with a JSON-RPC response |
+| `POST /mcp` with a notification and a known session ID | `202 Accepted` with no body |
+| `POST /mcp` with a different message and no session ID | `400 Bad Request` |
+| `POST /mcp` with a body that is not JSON-RPC | `400 Bad Request` |
+| `POST /mcp` with an unsupported `mcp-protocol-version` | `400 Bad Request` |
+| `GET /mcp` or `GET /mcp/sse` with a known session ID | `200 OK` with a `text/event-stream` body |
+| `GET` or `HEAD` on `/mcp` or `/mcp/sse` with no session ID | `400 Bad Request` |
+| `DELETE /mcp` with a known session ID | `204 No Content`. The session ends. |
+| `DELETE /mcp` with no session ID | `400 Bad Request` |
+| `POST`, `GET`, or `DELETE` with an unknown session ID | `404 Not Found` |
+| Any other method on `/mcp` | `405` with `Allow: POST,GET,HEAD,DELETE` |
+| Any method except `GET` or `HEAD` on `/mcp/sse` | `405` with `Allow: GET,HEAD` |
+
+A request without `mcp-protocol-version` is accepted.
+HTTP error bodies are plain text or a small JSON object. They are not JSON-RPC messages.
+
 ## Security
 
 The endpoint rejects a request with status `403` if its `Origin` header is not a loopback origin.

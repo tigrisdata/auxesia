@@ -8,7 +8,7 @@ axum = "0.8"
 # `Bytes::from_owner` shares cached content with responses without copying.
 bytes = "1.9"
 http-body = "1"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time"] }
 clap = { version = "4", features = ["derive"] }
 comrak = { version = "0.57", default-features = false }
 serde = { version = "1", features = ["derive"] }
