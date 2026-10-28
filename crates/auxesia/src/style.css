@@ -1,7 +1,7 @@
 /* Layout inspired by sw (MIT), Nibble and contributors. */
 :root { color-scheme: light; --ink: #111; --link: #369; --header: #ccc; --bar: #ddd; }
 * { box-sizing: border-box; }
-body { margin: 0; color: var(--ink); background: #fff; font: 1rem/1.6 sans-serif; }
+body { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; margin: 0; color: var(--ink); background: #fff; font: 1rem/1.6 sans-serif; }
 a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; }
 .header { background: var(--header); }
@@ -22,7 +22,7 @@ table { display: block; max-width: 100%; overflow-x: auto; border-collapse: coll
 th, td { padding: .4em .8em; border: 1px solid #ccc; text-align: left; }
 blockquote { border-left: 2px solid #666; margin-left: 0; padding-left: 1em; }
 img, video { max-width: 100%; height: auto; }
-#footer { background: var(--bar); padding: 2em; text-align: right; font-size: .9em; }
+#footer { margin-top: auto; background: var(--bar); padding: 2em; text-align: right; font-size: .9em; }
 #footer > :first-child { margin-top: 0; }
 #footer > :last-child { margin-bottom: 0; }
 .auxesia-errors { position: fixed; bottom: 1rem; right: 1rem; z-index: 1000; max-width: min(42rem, calc(100vw - 2rem)); max-height: 45vh; overflow: auto; border: 2px solid #b33; background: #fff4f4; color: #500; padding: 1em; box-shadow: 0 2px 8px #999; }

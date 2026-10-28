@@ -353,7 +353,7 @@ pub fn from_capture(captured: Capture) -> Result<Site, Failure> {
         {
             continue;
         }
-        if !path.to_ascii_lowercase().ends_with(".md") {
+        if path.starts_with("static/") || !path.to_ascii_lowercase().ends_with(".md") {
             continue;
         }
         let skill = if let Some(bundle) = bundle {
@@ -390,6 +390,13 @@ pub fn from_capture(captured: Capture) -> Result<Site, Failure> {
             ".auxesia.yaml: stylesheet {css:?} must name an eligible file inside the docs root"
         ));
     }
+    if let Some(icon) = &captured.config.favicon
+        && (!valid_relative(icon) || !captured.files.contains_key(icon))
+    {
+        failure.errors.push(format!(
+            ".auxesia.yaml: favicon {icon:?} must name an eligible file inside the docs root"
+        ));
+    }
     if !failure.errors.is_empty() {
         failure.errors.sort();
         return Err(failure);
@@ -398,7 +405,11 @@ pub fn from_capture(captured: Capture) -> Result<Site, Failure> {
         config: captured.config,
         pages,
         files: captured.files,
-        dirs: captured.dirs,
+        dirs: captured
+            .dirs
+            .into_iter()
+            .filter(|dir| dir != "static" && !dir.starts_with("static/"))
+            .collect(),
         bundles: captured.bundles,
         fingerprint: captured.fingerprint,
         warnings: failure.warnings,

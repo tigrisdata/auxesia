@@ -215,6 +215,9 @@ pub fn build(site: Site) -> Result<Snapshot, Failure> {
 pub fn build_cached(mut site: Site, previous: Option<&Snapshot>) -> Result<Snapshot, Failure> {
     let mut routes = BTreeMap::new();
     let mut errors = Vec::new();
+    if let Err(error) = crate::favicon::generate(&site, &mut routes) {
+        errors.push(error);
+    }
     insert(
         &mut routes,
         "/_auxesia/style.css".into(),
@@ -487,6 +490,9 @@ fn shell(site: &Site, path: &str, title: &str, description: Option<&str>, body: 
         html.push_str(&format!("<meta name=\"description\" content=\"{0}\"><meta property=\"og:description\" content=\"{0}\">", escape(description)));
     }
     html.push_str("<link rel=\"stylesheet\" href=\"/_auxesia/style.css\">");
+    if site.config.favicon.is_some() {
+        html.push_str(crate::favicon::LINKS);
+    }
     if let Some(css) = &site.config.stylesheet {
         html.push_str(&format!(
             "<link rel=\"stylesheet\" href=\"{}\">",

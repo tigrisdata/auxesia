@@ -14,6 +14,7 @@ title: Engineering handbook
 subtitle: Notes for our team
 footer: 'Maintained by **Engineering** · [Contact](/contact.md)'
 stylesheet: assets/custom.css
+favicon: static/logo.png
 ignore:
   - drafts
   - "**/*.tmp"
@@ -29,6 +30,7 @@ llms:
 | `subtitle` | String | Empty string | Text beside the site title in the HTML header. |
 | `footer` | Optional string | Attribution shown below | Markdown rendered in the footer. An empty or whitespace-only string hides the footer. |
 | `stylesheet` | Optional string | None | Path to a custom stylesheet, relative to the root. |
+| `favicon` | Optional string | None | Image path relative to the root. Generates browser and touch icons. |
 | `ignore` | List of strings | Empty list | Glob patterns that exclude paths from the site. |
 | `llms` | Object | Object with an empty `header` | Configuration for `/llms.txt`. |
 | `llms.header` | String | Empty string | Text after the site title in `/llms.txt`, before the generated guidance. |
@@ -69,6 +71,36 @@ Ignored files and symbolic links cannot supply the stylesheet.
 Auxesia includes the custom stylesheet after its bundled stylesheet at `/_auxesia/style.css`.
 The normal CSS cascade determines which declarations apply.
 Auxesia does not parse the custom file as CSS.
+
+## Favicon
+
+Set `favicon` to an image inside the documentation root:
+
+```yaml
+favicon: static/logo.png
+```
+
+The path has the same restrictions as `stylesheet`.
+Supported source formats are PNG, JPEG, WebP, ICO, and BMP.
+SVG files can be served from `static/`, but favicon generation requires a raster image.
+Source images must fit within 4096 × 4096 pixels and the 64 MiB decoder allocation limit.
+
+Auxesia generates these URLs and adds icon links to every HTML page:
+
+| URL | Content |
+| --- | --- |
+| `/.auxesia/gen/favicon.ico` | ICO with 16 × 16, 32 × 32, and 48 × 48 images. |
+| `/.auxesia/gen/favicon-16x16.png` | 16 × 16 PNG. |
+| `/.auxesia/gen/favicon-32x32.png` | 32 × 32 PNG. |
+| `/.auxesia/gen/apple-touch-icon.png` | 180 × 180 PNG. |
+
+Images retain their proportions, with transparent padding around images that are not square.
+Generated images stay in memory. Auxesia does not write files into the documentation root.
+The original image remains available at its source URL, such as `/static/logo.png`.
+
+Image edits take effect with the next valid snapshot.
+If decoding fails, startup fails or the running server retains the last valid site.
+Omit `favicon` or set it to `null` to disable generation and remove the HTML icon links.
 
 ## Ignore patterns
 

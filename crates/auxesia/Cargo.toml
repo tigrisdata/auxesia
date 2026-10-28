@@ -22,6 +22,7 @@ mcpkit-axum = "0.7"
 mcpkit-server = "0.7"
 mcpkit-core = "0.7"
 serde_json = "1"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "ico", "webp"] }
 
 [dev-dependencies]
 tempfile = "3"

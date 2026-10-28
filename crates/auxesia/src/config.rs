@@ -12,6 +12,8 @@ pub struct Config {
     pub footer: Option<String>,
     #[serde(deserialize_with = "optional_string")]
     pub stylesheet: Option<String>,
+    #[serde(deserialize_with = "optional_string")]
+    pub favicon: Option<String>,
     #[serde(deserialize_with = "strings")]
     pub ignore: Vec<String>,
     pub llms: Llms,

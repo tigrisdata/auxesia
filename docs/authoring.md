@@ -46,6 +46,18 @@ Place assets inside the documentation folder. Then use their paths in the Markdo
 
 Auxesia serves eligible non-Markdown files as static assets. Hidden files and ignored paths are absent from the site. Symlinks cause an error.
 
+Put files in the root `static/` folder to serve them without page processing:
+
+```markdown
+![Logo](/static/logo.svg)
+[Example Markdown](/static/example.md)
+```
+
+For example, `docs/static/logo.svg` is available at `/static/logo.svg` when the documentation root is `docs`.
+Markdown files in this folder need no frontmatter and return their original bytes.
+The folder has no directory pages or discovery entries. Hidden files, ignore patterns, and symlink restrictions still apply.
+See [Favicon configuration](/reference/configuration.md#favicon) to generate browser icons from an image.
+
 ## Create directory pages
 
 A directory can contain `index.md` or `README.md`. Auxesia uses `index.md` first, then `README.md`, as the page for the directory URL.

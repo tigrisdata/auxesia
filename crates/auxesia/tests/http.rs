@@ -813,3 +813,105 @@ async fn head_matches_get_headers_without_a_body() {
         );
     }
 }
+
+#[tokio::test]
+async fn static_files_are_raw_and_have_no_directory_pages() {
+    let root = TempDir::new().unwrap();
+    put(&root, "static/nested/notes.md", "No frontmatter needed\n");
+    put(&root, "static/index.html", "<h1>Raw HTML</h1>");
+    put(&root, "static/.secret", "secret");
+    put(&root, ".auxesia.yaml", "ignore: [static/ignored.txt]\n");
+    put(&root, "static/ignored.txt", "ignored");
+    let app = App::open(root.path(), false).unwrap();
+    let (status, headers, body) =
+        request(&app, "/static/nested/notes.md", Some("text/html"), "GET").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(headers["content-type"], "text/markdown; charset=utf-8");
+    assert_eq!(body, b"No frontmatter needed\n");
+    assert_eq!(
+        request(&app, "/static/index.html", None, "GET").await.2,
+        b"<h1>Raw HTML</h1>"
+    );
+    for path in [
+        "/static",
+        "/static/",
+        "/static/nested/",
+        "/static/.secret",
+        "/static/ignored.txt",
+    ] {
+        assert_eq!(
+            request(&app, path, None, "GET").await.0,
+            StatusCode::NOT_FOUND,
+            "{path}"
+        );
+    }
+    for path in ["/", "/llms.txt"] {
+        let body = String::from_utf8(request(&app, path, None, "GET").await.2).unwrap();
+        assert!(!body.contains("/static/"));
+    }
+}
+
+#[test]
+fn favicon_configuration_requires_an_eligible_image() {
+    let root = TempDir::new().unwrap();
+    for source in [
+        "missing.png",
+        "../outside.png",
+        "/absolute.png",
+        ".hidden.png",
+        "static/broken.png",
+    ] {
+        put(&root, "static/broken.png", "not an image");
+        put(&root, ".auxesia.yaml", &format!("favicon: {source}\n"));
+        let error = App::open(root.path(), false).err().unwrap().to_string();
+        assert!(error.contains("favicon"));
+        assert!(!error.contains("unknown field"), "{error}");
+    }
+}
+
+#[tokio::test]
+async fn favicon_outputs_are_images_and_refresh_atomically() {
+    let root = TempDir::new().unwrap();
+    put(&root, ".auxesia.yaml", "favicon: static/logo.png\n");
+    fs::create_dir_all(root.path().join("static")).unwrap();
+    let source = root.path().join("static/logo.png");
+    image::RgbaImage::from_pixel(64, 32, image::Rgba([255, 0, 0, 255]))
+        .save(&source)
+        .unwrap();
+    let app = App::open(root.path(), true).unwrap();
+    let html = String::from_utf8(request(&app, "/", None, "GET").await.2).unwrap();
+    for (name, size, mime) in [
+        ("favicon.ico", 48, "image/x-icon"),
+        ("favicon-16x16.png", 16, "image/png"),
+        ("favicon-32x32.png", 32, "image/png"),
+        ("apple-touch-icon.png", 180, "image/png"),
+    ] {
+        let path = format!("/.auxesia/gen/{name}");
+        assert!(html.contains(&path));
+        let (status, headers, body) = request(&app, &path, None, "GET").await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(headers["content-type"], mime);
+        let decoded = image::load_from_memory(&body).unwrap().to_rgba8();
+        assert_eq!(decoded.dimensions(), (size, size));
+        assert_eq!(decoded.get_pixel(size / 2, size / 2).0, [255, 0, 0, 255]);
+        assert_eq!(decoded.get_pixel(0, 0).0[3], 0);
+        let (_, head, empty) = request(&app, &path, None, "HEAD").await;
+        assert!(empty.is_empty());
+        assert_eq!(head["content-length"], body.len().to_string());
+    }
+    let path = "/.auxesia/gen/favicon.ico";
+    let original = request(&app, path, None, "GET").await.2;
+    assert_eq!(&original[..6], &[0, 0, 1, 0, 3, 0]);
+    fs::write(&source, b"broken").unwrap();
+    assert_eq!(request(&app, path, None, "GET").await.2, original);
+    image::RgbaImage::from_pixel(32, 32, image::Rgba([0, 0, 255, 255]))
+        .save(&source)
+        .unwrap();
+    assert_ne!(request(&app, path, None, "GET").await.2, original);
+    put(&root, ".auxesia.yaml", "{}");
+    assert_eq!(
+        request(&app, path, None, "GET").await.0,
+        StatusCode::NOT_FOUND
+    );
+    assert!(!root.path().join(".auxesia").exists());
+}
