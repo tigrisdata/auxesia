@@ -12,6 +12,7 @@ use axum::{
 };
 use bytes::Bytes;
 use http_body::{Frame, SizeHint};
+use mcpkit_axum::McpRouter;
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use std::{
     collections::VecDeque,
@@ -48,8 +49,17 @@ impl App {
         }))
     }
 
+    // Build the router once and clone it: each build starts an empty MCP session store.
     pub fn router(self: &Arc<Self>) -> Router {
-        Router::new().fallback(handle).with_state(self.clone())
+        Router::new()
+            .fallback(handle)
+            .with_state(self.clone())
+            .merge(McpRouter::new(crate::mcp::Skills::new(self.clone())).into_router())
+    }
+
+    /// Returns the latest valid state, refreshing it from disk first.
+    pub async fn current(self: &Arc<Self>) -> Arc<ServingState> {
+        self.refresh().await
     }
 
     async fn refresh(self: &Arc<Self>) -> Arc<ServingState> {

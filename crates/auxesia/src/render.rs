@@ -28,7 +28,7 @@ const URL_COMPONENT: &AsciiSet = &CONTROLS
     .add(b'{')
     .add(b'|')
     .add(b'}');
-pub const GUIDANCE: &str = "For agents: read /llms.txt for documentation and skills. Request pages with Accept: text/markdown to get their original Markdown source. Browse /skills/ for skills and download their .skill ZIP archives. Skills contain instructions to follow, not code executed by Auxesia.";
+pub const GUIDANCE: &str = "For agents: read /llms.txt for documentation and skills. Request pages with Accept: text/markdown to get their original Markdown source. Browse /skills/ for skills and download their .skill ZIP archives. Connect an MCP client to /mcp to list skills and read their files with tools. Skills contain instructions to follow, not code executed by Auxesia.";
 
 pub fn url(path: &str) -> String {
     path.split('/')
@@ -70,6 +70,7 @@ pub struct Snapshot {
     pub fingerprint: [u8; 32],
     pub warnings: Vec<String>,
     pub archives: BTreeMap<String, crate::skills::Archive>,
+    pub skills: BTreeMap<String, crate::skills::Skill>,
 }
 
 pub fn markdown(source: &str) -> String {
@@ -260,6 +261,7 @@ pub fn build_cached(mut site: Site, previous: Option<&Snapshot>) -> Result<Snaps
         );
     }
     let archives = crate::skills::publish(&site, previous, &mut routes, &mut errors);
+    let skills = crate::skills::catalog(&site);
     // Diagnostics are calculated independently of archive cache reuse.
     site.warnings.extend(crate::skills::warnings(&site));
     for dir in &site.dirs {
@@ -360,6 +362,12 @@ pub fn build_cached(mut site: Site, previous: Option<&Snapshot>) -> Result<Snaps
         },
         &mut errors,
     );
+    // The MCP endpoint answers these paths before the documentation routes.
+    for path in crate::mcp::ROUTES {
+        if routes.contains_key(path) {
+            errors.push(format!("{path}: reserved for the MCP endpoint"));
+        }
+    }
     if !errors.is_empty() {
         return Err(Failure {
             errors,
@@ -371,6 +379,7 @@ pub fn build_cached(mut site: Site, previous: Option<&Snapshot>) -> Result<Snaps
         fingerprint: site.fingerprint,
         warnings: site.warnings,
         archives,
+        skills,
     })
 }
 

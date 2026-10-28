@@ -7,6 +7,7 @@ description: Publish agent instructions as Markdown pages and downloadable skill
 
 Auxesia publishes instructions for agents. It never runs a skill or a script from a skill bundle.
 The HTML pages and `/llms.txt` explain how agents can find pages and download skills.
+Agents can also read skills with tools through the [MCP endpoint](/reference/mcp.md).
 Each skill page has a download button above its instructions.
 
 ## Source layout
@@ -107,6 +108,9 @@ External URLs do not need an archive entry.
 Skills appear in directory listings and `/llms.txt` by default.
 With `index: false` in the entrypoint frontmatter, Auxesia excludes the skill from these discovery lists.
 Its page and archive remain available through their direct URLs.
+
+MCP clients can also find skills through the `/mcp` endpoint.
+The `list_skills` tool uses the same discovery rules. See [MCP](/reference/mcp.md).
 
 The `.auxesia.yaml` file can exclude files with `ignore` patterns.
 An ignored supporting file disappears from the raw routes and the archive.

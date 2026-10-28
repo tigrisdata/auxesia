@@ -55,6 +55,7 @@ Other parameters prevent that media range from matching.
 ## Methods and status codes
 
 Auxesia accepts `GET` and `HEAD`.
+The MCP endpoint at `/mcp` is different. It also accepts `POST` and `DELETE`. See [MCP](/reference/mcp.md).
 A `HEAD` response has the same status and representation headers as `GET`, with an empty body.
 Its `Content-Length` describes the corresponding `GET` body.
 Other methods return `405 Method Not Allowed` with `Allow: GET, HEAD`.
@@ -99,8 +100,9 @@ Auxesia generates `/llms.txt` as `text/plain; charset=utf-8`.
 It includes the site title, `llms.header`, agent guidance, documentation links, skill links, and archive links.
 Pages with `index: false` do not appear in this file.
 The source tree cannot define `llms.txt` or files beneath `_auxesia/` because these routes are reserved.
+The `/mcp` and `/mcp/sse` routes are also reserved for the [MCP endpoint](/reference/mcp.md).
 
-Root HTML contains hidden agent guidance about `/llms.txt`, Markdown requests, skills, and downloads.
+Root HTML contains hidden agent guidance about `/llms.txt`, Markdown requests, skills, downloads, and the MCP endpoint.
 The guidance does not appear in the original Markdown response.
 
 ## URLs and caching
